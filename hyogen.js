@@ -1,5 +1,5 @@
 /**
- * https://github.com/silent-tempest/SLang
+ * https://github.com/silent-tempest/Hyogen
  *
  * MIT License
  *
