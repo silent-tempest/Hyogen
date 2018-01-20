@@ -27,19 +27,6 @@
 
 'use strict';
 
-try {
-
-// for mobile-debugging
-var DEBUG = function ( value ) {
-  alert( JSON.stringify(
-    arguments.length <= 1 ?
-      value : arguments, null, '\t' ) );
-};
-
-Array.prototype.toJSON = function () {
-  return _.toPlainObject( this );
-};
-
 /**
  * #types
  */
@@ -181,7 +168,11 @@ var stmt_with_one_arg = function ( type ) {
  * #create-punctuator
  */
 var create_punctuator = function ( p_type ) {
-  var Punctuator = function ( value, d_type, priority ) {
+  var Punctuator = function ( value, d_type, priority, rtl ) {
+    if ( rtl ) {
+      this.rtl = true;
+    }
+
     this.value = value;
     this.d_type = d_type;
     this.priority = priority;
@@ -678,90 +669,109 @@ Scanner.prototype.scan = function ( code ) {
 
   tokens[ tokens.length - 1 ] = TOKENS.EOF;
 
-  // console.log( tokens );
-
   return tokens;
 };
 
 var Parser = function () {};
 
-Parser.sort_by_priority = function ( a, b ) {
-  return b.token.priority - a.token.priority;
+Parser.sort = function ( a, b ) {
+  return a[ 0 ].token.priority - b[ 0 ].token.priority;
 };
 
-Parser.prototype.expressions = function ( tokens ) {
-  var t_len = tokens.length,
-    punctuators = [],
-    i = 0,
-    len;
+Parser.expression = function ( punctuator, tokens ) {
+  var token = punctuator.token;
+  var len = tokens.length;
 
-  for ( ; i < t_len; ++i ) {
-    if ( tokens[ i ].t_type === TYPES.PUNCTUATOR ) {
-      punctuators.push( {
-        token: tokens[ i ],
-        index: i
-      } );
-    }
-  }
+  switch ( token.p_type ) {
+    case TYPES.UNARY:
+      throw SyntaxError();
 
-  punctuators.sort( Parser.sort_by_priority );
+    case TYPES.BINARY:
+      var a, b;
 
-  for ( i = 0, len = punctuators.length; i < len; ++i ) {
-    var p = punctuators[ i ].token,
-      index = punctuators[ i ].index;
+      for ( var j = punctuator.index - 1; j >= 0; --j ) {
+        if ( ( a = tokens[ j ] ) ) {
+          tokens[ j ] = null;
 
-    switch ( p.p_type ) {
-      case TYPES.UNARY:
-        throw TypeError();
+          if ( a.t_type !== TYPES.WHITESPACE && a.t_type !== TYPES.EOF ) {
+            break;
+          }
 
-      case TYPES.BINARY:
-        var a, b, j, k;
-
-        for ( j = index - 1; j >= 0; --j ) {
-          if ( ( a = tokens[ j ] ) ) {
-            if ( a.t_type !== TYPES.WHITESPACE ) {
-              break;
-            }
-
-            if ( !j ) {
-              a = null;
-            }
-
-            tokens[ j ] = null;
+          if ( !j ) {
+            a = null;
           }
         }
+      }
 
-        if ( !a ) {
-          throw TypeError( 'Unexpected left operand for "' +
-            p.value + '"' );
-        }
+      if ( !a ) {
+        throw SyntaxError( 'Unexpected left operand for "' + token.value + '"' );
+      }
+        
+      for ( var k = punctuator.index + 1; k < len; ++k ) {
+        if ( ( b = tokens[ k ] ) ) {
+          tokens[ k ] = null;
 
-        for ( k = index + 1; k < t_len; ++k ) {
-          if ( ( b = tokens[ k ] ) ) {
-            if ( b.t_type !== TYPES.WHITESPACE ) {
-              break;
-            }
+          if ( b.t_type !== TYPES.WHITESPACE && b.t_type !== TYPES.EOF ) {
+            break;
+          }
 
-            if ( !k ) {
-              b = null;
-            }
-
-            tokens[ k ] = null;
+          if ( k >= len - 1 ) {
+            b = null;
           }
         }
+      }
 
-        if ( !b ) {
-          throw TypeError( 'Unexpected right operand for "' +
-            p.value + '"' );
-        }
+      if ( !b ) {
+        throw SyntaxError( 'Unexpected right operand for "' + token.value + '"' );
+      }
 
-        tokens[ k ] = tokens[ j ] = null;
-        tokens[ index ] = new BinaryExpression( p.d_type, a, b );
+      tokens[ punctuator.index ] = new BinaryExpression( token.d_type, a, b );
 
-        break;
+      break;
 
       case TYPES.TERNARY:
         throw SyntaxError();
+    }
+};
+
+var TempPunctuator = function ( token, index ) {
+  this.token = token;
+  this.index = index;
+};
+
+Parser.prototype.expressions = function ( tokens ) {
+  var types = [];
+  var added = {};
+
+  for ( var k = tokens.length - 1; k >= 0; --k ) {
+    var token = tokens[ k ];
+
+    if ( token.t_type === TYPES.PUNCTUATOR ) {
+      if ( added[ token.d_type ] == null ) {
+        added[ token.d_type ] = types.length;
+
+        types.push( [
+          new TempPunctuator( token, k )
+        ] );
+      } else {
+        types[ added[ token.d_type ] ].push( new TempPunctuator( token, k ) );
+      }
+    }
+  }
+
+  types.sort( Parser.sort );
+
+  for ( var i = types.length - 1; i >= 0; --i ) {
+    var punctuators = types[ i ];
+
+    if ( punctuators[ 0 ].token.rtl ) {
+      for ( var j = 0, len = punctuators.length; j < len; ++j ) {
+        Parser.expression( punctuators[ j ], tokens );
+      }
+    } else {
+      for ( var j = punctuators.length - 1; j >= 0; --j ) {
+        Parser.expression( punctuators[ j ], tokens );
+      }
     }
   }
 
@@ -917,8 +927,6 @@ Parser.prototype[ TYPES.IF ] = function () {
   this.indent();
 
   ++this.level;
-
-  // DEBUG( this.i, tokens );
 
   return new IfStatement( cond, body, this.body() );
 };
@@ -1158,7 +1166,6 @@ GlobalScope.prototype = _.create( null );
 /** class ScopeManager */
 var ScopeManager = function ( scope ) {
   this.scope = scope;
-  // this.parent = parent_scope_manager;
 };
 
 ScopeManager.prototype.get = function ( identifier ) {
@@ -1710,30 +1717,30 @@ var TOKENS = {
   /**
    * #unary-operator-tokens
    */
-  TYPEOF : new UnaryPunctuator( 'typeof', TYPES.TYPEOF,  0 ),
-  NOT    : new UnaryPunctuator( '!',      TYPES.NOT,     0 ),
+  TYPEOF : new UnaryPunctuator( 'typeof', TYPES.TYPEOF,  0, true ),
+  NOT    : new UnaryPunctuator( '!',      TYPES.NOT,     0, true ),
   INC    : new UnaryPunctuator( '++',     TYPES.INC,     0 ),
   DEC    : new UnaryPunctuator( '--',     TYPES.DEC,     0 ),
 
   /**
    * #assignment-operator-tokens
    */
-  ASSIGN    : new BinaryPunctuator( '=',  TYPES.ASSIGN,     2 ),
-  ASSIGN_ADD: new BinaryPunctuator( '+=', TYPES.ASSIGN_ADD, 2 ),
-  ASSIGN_SUB: new BinaryPunctuator( '-=', TYPES.ASSIGN_SUB, 2 ),
-  ASSIGN_MUL: new BinaryPunctuator( '*=', TYPES.ASSIGN_MUL, 2 ),
-  ASSIGN_DIV: new BinaryPunctuator( '/=', TYPES.ASSIGN_DIV, 2 ),
+  ASSIGN    : new BinaryPunctuator( '=',  TYPES.ASSIGN,     2, true ),
+  ASSIGN_ADD: new BinaryPunctuator( '+=', TYPES.ASSIGN_ADD, 2, true ),
+  ASSIGN_SUB: new BinaryPunctuator( '-=', TYPES.ASSIGN_SUB, 2, true ),
+  ASSIGN_MUL: new BinaryPunctuator( '*=', TYPES.ASSIGN_MUL, 2, true ),
+  ASSIGN_DIV: new BinaryPunctuator( '/=', TYPES.ASSIGN_DIV, 2, true ),
 
   /**
    * #binary-operator-tokens
    */
-  OR   : new BinaryPunctuator( 'or',  TYPES.OR,    4 ),
-  AND  : new BinaryPunctuator( 'and', TYPES.AND,   5 ),
-  ADD  : new BinaryPunctuator( '+',   TYPES.ADD,   12 ),
-  SUB  : new BinaryPunctuator( '-',   TYPES.SUB,   12 ),
-  MUL  : new BinaryPunctuator( '*',   TYPES.MUL,   13 ),
-  DIV  : new BinaryPunctuator( '/',   TYPES.DIV,   13 ),
-  PERIOD: new BinaryPunctuator( '.', TYPES.PERIOD, 19 ),
+  OR    : new BinaryPunctuator( 'or',  TYPES.OR,     4 ),
+  AND   : new BinaryPunctuator( 'and', TYPES.AND,    5 ),
+  ADD   : new BinaryPunctuator( '+',   TYPES.ADD,    12 ),
+  SUB   : new BinaryPunctuator( '-',   TYPES.SUB,    12 ),
+  MUL   : new BinaryPunctuator( '*',   TYPES.MUL,    13 ),
+  DIV   : new BinaryPunctuator( '/',   TYPES.DIV,    13 ),
+  PERIOD: new BinaryPunctuator( '.',   TYPES.PERIOD, 19 ),
 
   /**
    * #compare-operator-tokens
@@ -1822,9 +1829,5 @@ window.hyogen = {
   GlobalScope: GlobalScope,
   EmptyScope: EmptyScope
 };
-
-} catch ( ex ) {
-  alert( ex.name + ': ' + ex.message + '\n' + ex.stack );
-}
 
 } )( this );

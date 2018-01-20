@@ -1,4 +1,4 @@
-;( function ( window, undefined ) {
+;( function () {
 
 'use strict';
 
@@ -12,4 +12,4 @@ _.fetch( 'code/import.hg' )
   } )
   .then( main );
 
-} )( this );
+} )();
