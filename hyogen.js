@@ -739,6 +739,13 @@ var TempPunctuator = function ( token, index ) {
   this.index = index;
 };
 
+var p_hooks = {};
+
+p_hooks[ TYPES.ASSIGN_ADD ] =
+  p_hooks[ TYPES.ASSIGN_SUB ] =
+  p_hooks[ TYPES.ASSIGN_MUL ] =
+  p_hooks[ TYPES.ASSIGN_DIV ] = TYPES.ASSIGN;
+
 Parser.prototype.expressions = function ( tokens ) {
   var types = [];
   var added = {};
@@ -747,14 +754,16 @@ Parser.prototype.expressions = function ( tokens ) {
     var token = tokens[ k ];
 
     if ( token.t_type === TYPES.PUNCTUATOR ) {
-      if ( added[ token.d_type ] == null ) {
-        added[ token.d_type ] = types.length;
+      var type = p_hooks[ token.d_type ] || token.d_type;
+
+      if ( added[ type ] == null ) {
+        added[ type ] = types.length;
 
         types.push( [
           new TempPunctuator( token, k )
         ] );
       } else {
-        types[ added[ token.d_type ] ].push( new TempPunctuator( token, k ) );
+        types[ added[ type ] ].push( new TempPunctuator( token, k ) );
       }
     }
   }

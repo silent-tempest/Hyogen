@@ -3,7 +3,11 @@
 'use strict';
 
 var main = function ( code ) {
-  new hyogen.Runtime()[ 'eval' ]( code );
+  try {
+    new hyogen.Runtime()[ 'eval' ]( code );
+  } catch ( ex ) {
+    alert( ex );
+  }
 };
 
 _.fetch( 'code/import.hg' )
