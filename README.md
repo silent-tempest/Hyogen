@@ -1,7 +1,7 @@
 # Hyogen
 Hyogen is a programming language written in JavaScript.
 
-# Syntax Example
+## Syntax Example
 
 ```python
 a = b = 2 + 2 * 2
