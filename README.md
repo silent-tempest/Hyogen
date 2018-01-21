@@ -3,7 +3,7 @@ Hyogen is a programming language written in JavaScript.
 
 # Syntax Example
 
-```
+```python
 a = b = 2 + 2 * 2
 
 if a == b
@@ -13,4 +13,6 @@ if a == b
   print b
 else
   print 'something wrong.'
+
+# -> 59184606
 ```
