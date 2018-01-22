@@ -1672,11 +1672,13 @@ Runtime.prototype[ TYPES.CONTINUE ] = function () {
 };
 
 Runtime.prototype[ TYPES.PRINT ] = function ( statement ) {
-  var value = this.data( statement.value ).value;
+  var value = this.data( statement.value );
 
   switch ( value.d_type ) {
     case TYPES.DEF:
-      value = TAGS[ value.d_type ];
+      value = TAGS[ value.d_type ]; break;
+    default:
+      value = value.value;
   }
 
   alert( value );
