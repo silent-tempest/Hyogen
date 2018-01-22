@@ -1672,8 +1672,19 @@ Runtime.prototype[ TYPES.CONTINUE ] = function () {
 };
 
 Runtime.prototype[ TYPES.PRINT ] = function ( statement ) {
-  alert( this.data( statement.value ).value );
+  var value = this.data( statement.value ).value;
+
+  switch ( value.d_type ) {
+    case TYPES.DEF:
+      value = TAGS[ value.d_type ];
+  }
+
+  alert( value );
 };
+
+var TAGS = {};
+
+TAGS[ TYPES.DEF ] = '<Funtion>';
 
 Runtime.prototype[ TYPES.PROMPT ] = function ( statement ) {
   this.scope_manager.set( statement.identifier,
