@@ -1686,7 +1686,7 @@ Runtime.prototype[ TYPES.PRINT ] = function ( statement ) {
 
 var TAGS = {};
 
-TAGS[ TYPES.DEF ] = '<Funtion>';
+TAGS[ TYPES.DEF ] = '<Function>';
 
 Runtime.prototype[ TYPES.PROMPT ] = function ( statement ) {
   this.scope_manager.set( statement.identifier,
