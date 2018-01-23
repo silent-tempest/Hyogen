@@ -2,8 +2,10 @@
 
 'use strict';
 
+var output = document.getElementById( 'output' );
+
 hyogen.settings.print = function ( value ) {
-  _( 'textarea' ).text( value );
+  output.value += value;
 };
 
 var main = function ( code ) {

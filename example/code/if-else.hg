@@ -1,0 +1,9 @@
+
+hours = 10
+
+if hours < 0
+  print 'something wrong...'
+else if hours >= 24
+  print 'how are you?'
+else
+  print 'good time.'
