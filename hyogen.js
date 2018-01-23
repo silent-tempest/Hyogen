@@ -27,6 +27,10 @@
 
 'use strict';
 
+var settings = {
+  print: alert
+};
+
 /**
  * #types
  */
@@ -48,6 +52,7 @@ var TYPES = {
   STRING : 102,
   NUMBER : 103,
   COLOR  : 104,
+  ILLEGAL: 105,
 
   LPAREN    : 200,
   RPAREN    : 201,
@@ -382,24 +387,38 @@ Scanner.prototype.number = function ( number, has_point ) {
   return new Number( window.Number( number ) );
 };
 
+var table = function ( hash ) {
+  return _.assign( _.create( null ), hash );
+};
+
+var escaping_map = table( {
+  'n' : '\n',
+  'r' : '\r',
+  't' : '\t',
+  '\\': '\\',
+  '"' : '"',
+  "'" : "'"
+} );
+
 Scanner.prototype.string = function ( quote ) {
   var line = this.line,
     len = this.line_len,
     str = '',
-    esc_count = 0,
     ch;
 
   for ( ; this.j < len; ++this.j ) {
     ch = line.charAt( this.j );
 
-    if ( ch == quote && !( esc_count && esc_count % 2 ) ) {
+    if ( ch == quote ) {
       return new String( str );
     }
 
     if ( ch == '\\' ) {
-      ++esc_count;
-    } else if ( esc_count ) {
-      esc_count = 0;
+      if ( ( ch = escaping_map[ line.charAt( this.j + 1 ) ] ) == null ) {
+        ch = '';
+      }
+
+      ++this.j;
     }
 
     str += ch;
@@ -749,6 +768,7 @@ p_hooks[ TYPES.ASSIGN_ADD ] =
 Parser.prototype.expressions = function ( tokens ) {
   var types = [];
   var added = {};
+  var j, len;
 
   for ( var k = tokens.length - 1; k >= 0; --k ) {
     var token = tokens[ k ];
@@ -774,11 +794,11 @@ Parser.prototype.expressions = function ( tokens ) {
     var punctuators = types[ i ];
 
     if ( punctuators[ 0 ].token.rtl ) {
-      for ( var j = 0, len = punctuators.length; j < len; ++j ) {
+      for ( j = 0, len = punctuators.length; j < len; ++j ) {
         Parser.expression( punctuators[ j ], tokens );
       }
     } else {
-      for ( var j = punctuators.length - 1; j >= 0; --j ) {
+      for ( j = punctuators.length - 1; j >= 0; --j ) {
         Parser.expression( punctuators[ j ], tokens );
       }
     }
@@ -1050,6 +1070,31 @@ Parser.prototype[ TYPES.FOR ] = function () {
   }
 
   expected( a, 'd_type', TYPES.LPAREN );
+};
+
+var TAGS = _.create( null );
+
+TAGS[ TYPES.NULL ]    = '<Null>';
+TAGS[ TYPES.BOOLEAN ] = '<Boolean>';
+TAGS[ TYPES.NUMBER ]  = '<Number>';
+TAGS[ TYPES.STRING ]  = '<String>';
+TAGS[ TYPES.COLOR ]   = '<Color>';
+TAGS[ TYPES.DEF ]     = '<Function>';
+TAGS[ TYPES.ILLEGAL ] = '<Illegal>';
+
+var valid_cond = _.create( null );
+
+valid_cond[ TYPES.NULL ] =
+  valid_cond[ TYPES.BOOLEAN ] =
+  valid_cond[ TYPES.NUMBER ] =
+  valid_cond[ TYPES.STRING ] = true;
+
+var check_cond = function ( token ) {
+  if ( !valid_cond[ token.d_type ] ) {
+    throw TypeError( 'Expected boolean, got ' + ( TAGS[ token.d_type ] || TAGS[ TYPES.ILLEGAL ] ) );
+  }
+
+  return token;
 };
 
 var unexpected_token = function ( token ) {
@@ -1501,45 +1546,46 @@ Runtime.prototype[ TYPES.NE ] = function ( a, b ) {
 };
 
 Runtime.prototype[ TYPES.COND ] = function ( cond, a, b ) {
-  switch ( ( cond = this.scope_manager.data(
-    this.expression( cond ) ) ).d_type )
+  switch ( ( cond = check_cond( this.scope_manager.data(
+    this.expression( cond ) ) ) ).d_type )
   {
     case TYPES.NULL:
-      return this.expression( b );
+      return check_cond( this.expression( b ) );
     case TYPES.BOOLEAN:
     case TYPES.NUMBER:
     case TYPES.STRING:
-      return cond.value ? this.expression( a ) : this.expression( b );
+      return cond.value ?
+        check_cond( this.expression( a ) ) :
+        check_cond( this.expression( b ) );
   }
-
-  throw TypeError();
 };
 
 Runtime.prototype[ TYPES.OR ] = function ( a, b ) {
-  switch ( ( a = this.scope_manager.data(
-    this.expression( a ) ) ).d_type )
+  switch ( ( a = check_cond( this.scope_manager.data(
+    this.expression( a ) ) ) ).d_type )
   {
     case TYPES.NULL:
-      return this.expression( b );
+      return b;
     case TYPES.BOOLEAN:
     case TYPES.NUMBER:
-    case TYPES.STRING:
-      return a.value ? a : this.expression( b );
+      return a.value ?
+        a : check_cond( this.expression( b ) );
   }
 
   throw TypeError();
 };
 
 Runtime.prototype[ TYPES.AND ] = function ( a, b ) {
-  var value = this.scope_manager.data( this.expression( a ) );
-
-  switch ( value.d_type ) {
+  switch ( ( a = check_cond( this.scope_manager.data(
+    this.expression( a ) ) ) ).d_type )
+  {
     case TYPES.NULL:
       return a;
     case TYPES.BOOLEAN:
     case TYPES.NUMBER:
     case TYPES.STRING:
-      return value.value ? this.expression( b ) : a;
+      return a.value ?
+        check_cond( this.expression( b ) ) : a;
   }
 
   throw TypeError();
@@ -1597,7 +1643,7 @@ Runtime.prototype[ TYPES.FOR_TO ] = function ( statement ) {
  * #if-statement
  */
 Runtime.prototype[ TYPES.IF ] = function ( statement ) {
-  if ( this.data( statement.condition ).value ) {
+  if ( check_cond( this.data( statement.condition ) ).value ) {
     this.run( statement.body );
   } else if ( statement.alt ) {
     this.run( statement.alt );
@@ -1625,7 +1671,7 @@ Runtime.prototype[ TYPES.CALL ] = function ( call ) {
 Runtime.prototype[ TYPES.WHILE ] = function ( statement ) {
   ++this.loop_scope;
 
-  while ( this.data( statement.condition ).value ) {
+  while ( check_cond( this.data( statement.condition ) ).value ) {
     this.run( statement.body );
     this.check_continue();
 
@@ -1650,7 +1696,7 @@ Runtime.prototype[ TYPES.DO ] = function ( statement ) {
     if ( this.check_break() ) {
       break;
     }
-  } while ( this.data( statement.condition ).value );
+  } while ( check_cond( this.data( statement.condition ) ).value );
 
   --this.loop_scope;
 };
@@ -1681,12 +1727,8 @@ Runtime.prototype[ TYPES.PRINT ] = function ( statement ) {
       value = value.value;
   }
 
-  alert( value );
+  settings.print( value );
 };
-
-var TAGS = {};
-
-TAGS[ TYPES.DEF ] = '<Function>';
 
 Runtime.prototype[ TYPES.PROMPT ] = function ( statement ) {
   this.scope_manager.set( statement.identifier,
@@ -1849,7 +1891,8 @@ window.hyogen = {
   Parser : Parser,
   Runtime: Runtime,
   GlobalScope: GlobalScope,
-  EmptyScope: EmptyScope
+  EmptyScope: EmptyScope,
+  settings: settings
 };
 
 } )( this );

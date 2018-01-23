@@ -2,12 +2,12 @@
 
 'use strict';
 
+hyogen.settings.print = function ( value ) {
+  _( 'textarea' ).text( value );
+};
+
 var main = function ( code ) {
-  try {
-    new hyogen.Runtime()[ 'eval' ]( code );
-  } catch ( ex ) {
-    alert( ex );
-  }
+  new hyogen.Runtime()[ 'eval' ]( code );
 };
 
 _.fetch( 'code/import.hg' )
