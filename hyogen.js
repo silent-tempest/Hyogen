@@ -218,10 +218,7 @@ String.prototype.toUpperCase = function () {
 var IfStatement = create_stmt( function ( cond, body, alt ) {
   this.condition = cond;
   this.body = body;
-
-  if ( alt ) {
-    this.alt = alt;
-  }
+  set_if_exists( alt, 'alt', this );
 }, TYPES.IF );
 
 var ForToStatement = create_stmt( function ( init, final_expr, body ) {
@@ -230,10 +227,16 @@ var ForToStatement = create_stmt( function ( init, final_expr, body ) {
   this.body = body;
 }, TYPES.FOR_TO );
 
+var set_if_exists = function ( value, name, object ) {
+  if ( value ) {
+    object[ name ] = value;
+  }
+};
+
 var ForStatement = create_stmt( function ( init, cond, final_expr, body ) {
-  this.init = init;
-  this.condition = cond;
-  this.final_expr = final_expr;
+  set_if_exists( init, 'init', this );
+  set_if_exists( cond, 'condition', this );
+  set_if_exists( final_expr, 'final_expr', this );
   this.body = body;
 }, TYPES.FOR );
 
@@ -963,7 +966,7 @@ Parser.prototype.next = function () {
  *   Expression ( NLine | EOF )
  *
  * Parameters:
- *   Zero or more Parameter separated by comma.
+ *   One or more Parameter separated by comma.
  *
  * Parameter:
  *   Identifier | AssignExpression
@@ -996,7 +999,10 @@ Parser.prototype[ TYPES.DEF ] = function () {
       break;
 
     case TYPES.ARROW:
-      body = [ new ReturnStatement( expected_expr( this.next() ) ) ];
+      body = [
+        new ReturnStatement( expected_expr( this.next() ) )
+      ];
+
       tok = this.next();
 
       if ( tok.d_type !== TYPES.NLINE &&
@@ -1054,7 +1060,6 @@ Parser.prototype[ TYPES.IF ] = function () {
     body;
 
   expected( this.next(), 'd_type', TYPES.NLINE );
-
   this.indent();
 
   if ( this.level <= lvl ) {
@@ -1072,11 +1077,8 @@ Parser.prototype[ TYPES.IF ] = function () {
 
   // skip "else"
   this.i += 2;
-
   this.indent();
-
   ++this.level;
-
   return new IfStatement( cond, body, this.body() );
 };
 

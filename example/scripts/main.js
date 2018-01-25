@@ -9,7 +9,11 @@ hyogen.settings.print = function ( value ) {
 };
 
 var main = function ( code ) {
-  new hyogen.Runtime()[ 'eval' ]( code );
+  try {
+    alert( JSON.stringify( new hyogen.Runtime()[ 'eval' ]( code ), null, '\t' ) );
+  } catch ( ex ) {
+    alert( ex );
+  }
 };
 
 _.fetch( 'code/import.hg' )

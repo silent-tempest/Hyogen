@@ -1,0 +1,15 @@
+
+# bug: block was below incorrectly parsed
+def times ( times, callback )
+  for times to 0
+    callback # ( times )
+
+# this 'def' missed
+def add ( a, b ) => a + b
+
+def greet name
+  print 'Hello, ' + name + '!'
+
+def sq x => x * x
+
+print 'sq.length = ' + sq.length
