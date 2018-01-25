@@ -32,8 +32,13 @@
 'use strict';
 
 var settings = {
-  print: alert,
-  scan: prompt
+  print: function ( value ) {
+    alert( value );
+  },
+
+  scan: function () {
+    return prompt( '' );
+  }
 };
 
 /**
@@ -1911,9 +1916,6 @@ Runtime.prototype[ TYPES.WHILE ] = function ( statement ) {
   --this.loop_scope;
 };
 
-/**
- * #while-statement
- */
 Runtime.prototype[ TYPES.DO ] = function ( statement ) {
   ++this.loop_scope;
 
