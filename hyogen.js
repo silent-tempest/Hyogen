@@ -23,12 +23,17 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
+
+// jshint esversion: 5
+// jshint unused: true
+// jshint undef: true
 ;( function ( window, undefined ) {
 
 'use strict';
 
 var settings = {
-  print: alert
+  print: alert,
+  scan: prompt
 };
 
 /**
@@ -112,7 +117,7 @@ var TYPES = {
   CONTINUE : 419,
   FOR      : 420,
   FOR_TO   : 421,
-  PROMPT   : 422,
+  SCAN     : 422,
   CALL     : 423,
 
   /** p_type */
@@ -121,6 +126,78 @@ var TYPES = {
   TERNARY : 502,
   SEQUENCE: 503
 
+};
+
+var STRINGS = {
+  NAN: 'NaN'
+};
+
+var conversions = {
+  convert: function ( token, type ) {
+    var converter = conversions[ token.d_type ] &&
+      conversions[ token.d_type ][ type ];
+
+    if ( converter ) {
+      return converter( token );
+    }
+
+    throw TypeError( "Can't convert " + get_tag( token ) +
+      ' to ' + get_tag( type, true ) );
+  }
+};
+
+conversions[ TYPES.NULL ] = {};
+
+conversions[ TYPES.NULL ][ TYPES.BOOLEAN ] =
+conversions[ TYPES.NULL ][ TYPES.NUMBER ] =
+conversions[ TYPES.NULL ][ TYPES.STRING ] = function () {
+  return TOKENS.FALSE;
+};
+
+conversions[ TYPES.BOOLEAN ] = {};
+
+conversions[ TYPES.BOOLEAN ][ TYPES.NUMBER ] = function ( value ) {
+  return value ? TOKENS.ONE : TOKENS.ZERO;
+};
+
+conversions[ TYPES.BOOLEAN ][ TYPES.STRING ] = function ( value ) {
+  return value ? STRINGS.TRUE : STRINGS.FALSE;
+};
+
+conversions[ TYPES.NUMBER ] = {};
+
+conversions[ TYPES.NUMBER ][ TYPES.BOOLEAN ] = function ( token ) {
+  var value = token.value;
+
+  /**
+   * Convert 0 and NaN to false.
+   */
+  // if ( !value ) {
+  if ( value === 0 || value !== value ) {
+    return TOKENS.FALSE;
+  }
+
+  /**
+   * Otherwise return true.
+   */
+  return TOKENS.TRUE;
+};
+
+conversions[ TYPES.NUMBER ][ TYPES.STRING ] = function ( token ) {
+  var value = token.value;
+
+  if ( value !== value ) {
+    return STRINGS.NAN;
+  }
+
+  /**
+   * if value is Infinity
+   *   return STRINGS.POS_INFINITY
+   * else if value is -Infinity
+   *   return STRINGS.NEG_INFINITY
+   */
+
+  return '' + value;
 };
 
 var cond_exprs = {};
@@ -254,10 +331,9 @@ var PrintStatement = stmt_with_one_arg( TYPES.PRINT ),
     ImportStatement = stmt_with_one_arg( TYPES.IMPORT ),
     ReturnStatement = stmt_with_one_arg( TYPES.RETURN );
 
-var PromptStatement = create_stmt( function ( message, id ) {
-  this.value = message;
+var ScanStatement = create_stmt( function ( id ) {
   this.identifier = id;
-}, TYPES.PROMPT );
+}, TYPES.SCAN );
 
 var UnaryExpression = create_expr( function ( p, a ) {
   this.d_type = p;
@@ -1037,16 +1113,16 @@ Parser.prototype[ TYPES.IMPORT ] = function () {
 /**
  * Returns successfully parsed ReturnStatement.
  */
-Parser.prototype[ TYPES.RETURN ] = function ( value ) {
+Parser.prototype[ TYPES.RETURN ] = function () {
   return new ReturnStatement( expected_expr( this.next() ) );
 };
 
 /**
- * 'prompt' Expression Identifier
+ * 'scan' Identifier
  */
-Parser.prototype[ TYPES.PROMPT ] = function () {
-  return new PromptStatement( expected_expr( this.next() ),
-    expected( this.next(), 't_type', TYPES.IDENTIFIER ) );
+Parser.prototype[ TYPES.SCAN ] = function () {
+  return new ScanStatement( expected(
+    this.next(), 't_type', TYPES.IDENTIFIER ) );
 };
 
 /**
@@ -1156,7 +1232,6 @@ Parser.prototype[ TYPES.DO ] = function () {
  */
 Parser.prototype[ TYPES.FOR ] = function () {
   var lvl = this.level,
-    tokens = this.tokens,
     a = this.next(),
     b = this.next(),
     c;
@@ -1215,6 +1290,10 @@ Parser.prototype.not_required_expr = function ( token, req ) {
   return expr;
 };
 
+var get_tag = function ( token, is_type ) {
+  return TAGS[ is_type ? token : token.d_type ] || TAGS[ TYPES.ILLEGAL ];
+};
+
 var TAGS = _.create( null );
 
 TAGS[ TYPES.NULL ]    = '<Null>';
@@ -1234,8 +1313,7 @@ valid_cond[ TYPES.NULL ] =
 
 var check_cond = function ( token ) {
   if ( !valid_cond[ token.d_type ] ) {
-    throw TypeError( 'Expected boolean, got ' +
-      ( TAGS[ token.d_type ] || TAGS[ TYPES.ILLEGAL ] ) );
+    throw TypeError( 'Expected boolean, got ' + get_tag( token ) );
   }
 
   return token;
@@ -1402,9 +1480,9 @@ ScopeManager.prototype.set = function ( identifier, value ) {
   switch ( value.t_type ) {
     case TYPES.LITERAL:
     case TYPES.STATEMENT:
-      return this.scope[ identifier.value ] = value;
+      return ( this.scope[ identifier.value ] = value );
     case TYPES.IDENTIFIER:
-      return this.scope[ identifier.value ] = this.get( value );
+      return ( this.scope[ identifier.value ] = this.get( value ) );
   }
 
   throw TypeError( 'Expected expression, got "' + value.value + '"' );
@@ -1880,9 +1958,9 @@ Runtime.prototype[ TYPES.PRINT ] = function ( statement ) {
   settings.print( value );
 };
 
-Runtime.prototype[ TYPES.PROMPT ] = function ( statement ) {
-  this.scope_manager.set( statement.identifier,
-    new String( prompt( this.data( statement.value ).value ) ) );
+Runtime.prototype[ TYPES.SCAN ] = function ( stmt ) {
+  this.scope_manager.set( stmt.identifier,
+    new String( settings.scan() ) );
 };
 
 Runtime.prototype[ TYPES.IMPORT ] = function ( statement ) {
@@ -1994,7 +2072,7 @@ var TOKENS = {
   WHILE    : new Keyword( 'while',     TYPES.WHILE ),
   BREAK    : new Keyword( 'break',     TYPES.BREAK ),
   CONTINUE : new Keyword( 'continue',  TYPES.CONTINUE ),
-  PROMPT   : new Keyword( 'prompt',    TYPES.PROMPT ),
+  SCAN     : new Keyword( 'scan',      TYPES.SCAN ),
 
   EOF: {
     t_type: TYPES.EOF
@@ -2032,7 +2110,7 @@ _.forEach( [
   'WHILE',
   'BREAK',
   'CONTINUE',
-  'PROMPT'
+  'SCAN'
 ], function ( name ) {
   IDENTIFIERS[ this[ name ].value ] = this[ name ];
 }, TOKENS );

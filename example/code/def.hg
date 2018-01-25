@@ -1,5 +1,5 @@
 
-# bug: block was below incorrectly parsed
+# bug: block below was incorrectly parsed
 def times ( times, callback )
   for times to 0
     callback # ( times )
