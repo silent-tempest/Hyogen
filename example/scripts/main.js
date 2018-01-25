@@ -5,7 +5,7 @@
 var output = document.getElementById( 'output' );
 
 hyogen.settings.print = function ( value ) {
-  output.value += value;
+  output.value += value + '\n';
 };
 
 var main = function ( code ) {

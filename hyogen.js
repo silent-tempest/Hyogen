@@ -87,6 +87,7 @@ var TYPES = {
   ARROW     : 230,
   CONDITIONAL: 231,
   GROUPING  : 232,
+  SEMICOLON : 233,
 
   /** whitespaces */
   NLINE : 300,
@@ -128,9 +129,6 @@ cond_exprs[ TYPES.OR ] =
   cond_exprs[ TYPES.AND ] =
   cond_exprs[ TYPES.CONDITIONAL ] = true;
 
-/**
- * #create-literal
- */
 var create_literal = function ( d_type ) {
   var Literal = function ( value ) {
     this.value = value;
@@ -143,9 +141,6 @@ var create_literal = function ( d_type ) {
   return Literal;
 };
 
-/**
- * #create-statement
- */
 var create_stmt = function ( constructor, d_type ) {
   constructor.prototype = _.create( null );
   constructor.prototype.t_type = TYPES.STATEMENT;
@@ -153,9 +148,6 @@ var create_stmt = function ( constructor, d_type ) {
   return constructor;
 };
 
-/**
- * #create-expression
- */
 var create_expr = function ( constructor, type ) {
   constructor.prototype = _.create( null );
   constructor.prototype.t_type = TYPES.EXPRESSION;
@@ -169,9 +161,6 @@ var stmt_with_one_arg = function ( type ) {
   }, type );
 };
 
-/**
- * #create-punctuator
- */
 var create_punctuator = function ( p_type ) {
   var Punctuator = function ( value, d_type, priority, rtl ) {
     if ( rtl ) {
@@ -235,19 +224,26 @@ var IfStatement = create_stmt( function ( cond, body, alt ) {
   }
 }, TYPES.IF );
 
-var ForToStatement = create_stmt( function ( iterator, end, body ) {
-  this.iterator = iterator;
-  this.end = end;
+var ForToStatement = create_stmt( function ( init, final_expr, body ) {
+  this.init = init;
+  this.final_expr = final_expr;
   this.body = body;
 }, TYPES.FOR_TO );
 
-var WhileStatement = create_stmt( function ( condition, body ) {
-  this.condition = condition;
+var ForStatement = create_stmt( function ( init, cond, final_expr, body ) {
+  this.init = init;
+  this.condition = cond;
+  this.final_expr = final_expr;
+  this.body = body;
+}, TYPES.FOR );
+
+var WhileStatement = create_stmt( function ( cond, body ) {
+  this.condition = cond;
   this.body = body;
 }, TYPES.WHILE );
 
-var DoWhileStatement = create_stmt( function ( condition, body ) {
-  this.condition = condition;
+var DoWhileStatement = create_stmt( function ( cond, body ) {
+  this.condition = cond;
   this.body = body;
 }, TYPES.DO );
 
@@ -330,14 +326,18 @@ Whitespace.prototype = _.create( null );
 Whitespace.prototype.t_type = TYPES.WHITESPACE;
 
 /**
- * #is-digit
+ * Returns `true` if `ch`
+ * is a digit character.
+ * is_digit( '5' ) // -> true
+ * is_digit( 'b' ) // -> false
  */
 var is_digit = function ( ch ) {
   return ch >= '0' && ch <= '9';
 };
 
 /**
- * #is-identifier-start
+ * Returns `true` if `ch`
+ * is an IdentifierStart.
  */
 var is_identifier_start = function ( ch ) {
   return ch >= 'a' && ch <= 'z' ||
@@ -350,6 +350,11 @@ var is_identifier_start = function ( ch ) {
  */
 var Scanner = function () {};
 
+/**
+ * Returns an instance of the `Number`
+ * class with the value of the
+ * successfully scanned number.
+ */
 Scanner.prototype.number = function ( number, has_point ) {
   var line = this.line,
     len = this.line_len,
@@ -380,8 +385,10 @@ Scanner.prototype.number = function ( number, has_point ) {
     throw SyntaxError( 'Expected number, got "' + this.number + '"' );
   }
 
-  // if not to do decrement we'll skip symbol
-  // after the number, fix that
+  /**
+   * If not to do decrement we'll skip
+   * symbol after the number, fix that.
+   */
   --this.j;
 
   return new Number( window.Number( number ) );
@@ -400,6 +407,11 @@ var escaping_map = table( {
   "'" : "'"
 } );
 
+/**
+ * Returns an instance of the `String`
+ * class with the value of the
+ * successfully scanned string.
+ */
 Scanner.prototype.string = function ( quote ) {
   var line = this.line,
     len = this.line_len,
@@ -427,6 +439,11 @@ Scanner.prototype.string = function ( quote ) {
   throw SyntaxError( 'Unexpected end of line' );
 };
 
+/**
+ * Returns an instance of the `String`
+ * class with the value of the
+ * successfully scanned string.
+ */
 Scanner.prototype.identifier = function ( id ) {
   var line = this.line,
     len = this.line_len,
@@ -437,7 +454,10 @@ Scanner.prototype.identifier = function ( id ) {
       !is_identifier_start( ch = line.charAt( this.j ) ) &&
       !is_digit( ch ) )
     {
-      // create and cache new token if not found in `IDENTIFIERS`
+      /**
+       * Create and cache new token
+       * if not found in `IDENTIFIERS`.
+       */
       if ( !( token = IDENTIFIERS[ id ] ) ) {
         token = IDENTIFIERS[ id ] = new Identifier( id );
       }
@@ -448,17 +468,28 @@ Scanner.prototype.identifier = function ( id ) {
     }
   }
 
-  // if not to do decrement we'll skip symbol
-  // after the identifier, fix that
+  /**
+   * If not to do decrement we'll skip
+   * symbol after the identifier, fix that.
+   */
   --this.j;
 
   return token;
 };
 
+/**
+ * Skips the line.
+ */
 Scanner.prototype.skip = function () {
   this.j = this.line_len;
 };
 
+/**
+ * Adds spaces or tabs from
+ * the beginning of the line.
+ * They are needed to determine
+ * blocks of code.
+ */
 Scanner.prototype.indent = function () {
   var k = 1,
     j = this.j,
@@ -486,7 +517,10 @@ Scanner.prototype.indent = function () {
     }
   }
 
-  // `k` is `0` when the next iterarion will be on new line
+  /*
+   * `k` is `0` when the next
+   * iterarion will be on new line.
+   */
   this.line_started = !k;
 
   for ( ; k > 0; --k ) {
@@ -494,6 +528,17 @@ Scanner.prototype.indent = function () {
   }
 };
 
+/**
+ * Returns all tokens found in the `code`.
+ * new Scanner().scan( 'a + b' );
+ * It returns something like this:
+ * [
+ *   <Identifier>,
+ *   TOKENS.ADD,
+ *   <Identifier>,
+ *   TOKENS.EOF
+ * ]
+ */
 Scanner.prototype.scan = function ( code ) {
   if ( code == null ) {
     throw TypeError( "Can't scan " + code );
@@ -517,8 +562,10 @@ Scanner.prototype.scan = function ( code ) {
       this.ch = ch = line.charAt( this.j );
 
       if ( ch === ' ' || ch === '\t' ) {
-        // take the spaces only at the beginning
-        // of the line for finding blocks
+        /**
+         * Take the spaces only at
+         * the beginning of the line.
+         */
         if ( this.line_started ) {
           this.indent();
         }
@@ -534,7 +581,8 @@ Scanner.prototype.scan = function ( code ) {
         case '"':
         case "'":
           ++this.j;
-          token = this.string( ch ); break;
+          token = this.string( ch );
+          break;
 
         // "<=", "<"
         case '<':
@@ -583,10 +631,13 @@ Scanner.prototype.scan = function ( code ) {
 
           break;
 
-        // "+=", "+"
+        // "+=", "++", "+"
         case '+':
           if ( ( ch = line.charAt( this.j + 1 ) ) == '=' ) {
             token = TOKENS.ASSIGN_ADD;
+            ++this.j;
+          } else if ( ch === '+' ) {
+            token = TOKENS.INC;
             ++this.j;
           } else {
             token = TOKENS.ADD;
@@ -594,10 +645,13 @@ Scanner.prototype.scan = function ( code ) {
 
           break;
 
-        // "-=", "-"
+        // "-=", "--", "-"
         case '-':
           if ( ( ch = line.charAt( this.j + 1 ) ) == '=' ) {
             token = TOKENS.ASSIGN_SUB;
+            ++this.j;
+          } else if ( ch === '-' ) {
+            token = TOKENS.DEC;
             ++this.j;
           } else {
             token = TOKENS.SUB;
@@ -658,6 +712,8 @@ Scanner.prototype.scan = function ( code ) {
           token = TOKENS.LBRACE; break;
         case '}':
           token = TOKENS.RBRACE; break;
+        case ';':
+          token = TOKENS.SEMICOLON; break;
 
         default:
           if ( is_identifier_start( ch ) ) {
@@ -686,17 +742,34 @@ Scanner.prototype.scan = function ( code ) {
     }
   }
 
+  /**
+   * tokens[ tokens.length - 1 ] is
+   * the `TOKENS.NLINE`, this token
+   * isn't needed, but we need
+   * the `TOKENS.EOF` to specify
+   * the end of the file.
+   */
   tokens[ tokens.length - 1 ] = TOKENS.EOF;
 
   return tokens;
 };
 
+/**
+ * class Parser
+ */
 var Parser = function () {};
 
+/**
+ * Sorts punctuators by priority.
+ */
 Parser.sort = function ( a, b ) {
   return a[ 0 ].token.priority - b[ 0 ].token.priority;
 };
 
+/**
+ * Returns the expression created
+ * by the `punctuator`.
+ */
 Parser.expression = function ( punctuator, tokens ) {
   var token = punctuator.token;
   var len = tokens.length;
@@ -723,7 +796,8 @@ Parser.expression = function ( punctuator, tokens ) {
       }
 
       if ( !a ) {
-        throw SyntaxError( 'Unexpected left operand for "' + token.value + '"' );
+        throw SyntaxError( 'Unexpected left operand for "' +
+          token.value + '"' );
       }
         
       for ( var k = punctuator.index + 1; k < len; ++k ) {
@@ -741,10 +815,12 @@ Parser.expression = function ( punctuator, tokens ) {
       }
 
       if ( !b ) {
-        throw SyntaxError( 'Unexpected right operand for "' + token.value + '"' );
+        throw SyntaxError( 'Unexpected right operand for "' +
+          token.value + '"' );
       }
 
-      tokens[ punctuator.index ] = new BinaryExpression( token.d_type, a, b );
+      tokens[ punctuator.index ] =
+        new BinaryExpression( token.d_type, a, b );
 
       break;
 
@@ -753,6 +829,9 @@ Parser.expression = function ( punctuator, tokens ) {
     }
 };
 
+/**
+ * class TempPunctuator
+ */
 var TempPunctuator = function ( token, index ) {
   this.token = token;
   this.index = index;
@@ -765,6 +844,11 @@ p_hooks[ TYPES.ASSIGN_ADD ] =
   p_hooks[ TYPES.ASSIGN_MUL ] =
   p_hooks[ TYPES.ASSIGN_DIV ] = TYPES.ASSIGN;
 
+/**
+ * Constructs expressions
+ * from an array `tokens`.
+ * Note: this function mutates `tokens`.
+ */
 Parser.prototype.expressions = function ( tokens ) {
   var types = [];
   var added = {};
@@ -807,6 +891,10 @@ Parser.prototype.expressions = function ( tokens ) {
   return _.compact( tokens );
 };
 
+/**
+ * Returns an array of a sequence
+ * separated by the `TYPES.COMMA`.
+ */
 Parser.prototype.sequence = function ( pred ) {
   var seq = [],
     len = this.length,
@@ -830,16 +918,41 @@ Parser.prototype.sequence = function ( pred ) {
   return seq;
 };
 
+/**
+ * Returns code block.
+ */
+Parser.prototype.block = function ( lvl, stmt ) {
+  expected( this.next(), 'd_type', TYPES.NLINE );
+  this.indent();
+
+  if ( this.level < lvl ) {
+    throw SyntaxError( 'Empty ' + stmt + ' statement body' );
+  }
+
+  return this.body();
+};
+
+/**
+ * Returns `true` if the `token`
+ * is a FunctionDefinitionParameter.
+ */
 var is_param = function ( token ) {
   return token.t_type === TYPES.IDENTIFIER ||
     token.d_type === TYPES.ASSIGN;
 };
 
+/**
+ * Changes position of the "cursor"
+ * in the `tokens`, and
+ * returns next token.
+ */
 Parser.prototype.next = function () {
   return this.tokens[ ++this.i ];
 };
 
 /**
+ * Returns successfully parsed Function.
+ *
  * 'def' Identifier '(' [ Parameters ] ')' NLine
  *   Body
  * 'def' Identifier '(' [ Parameters ] ')' '=>'
@@ -902,16 +1015,22 @@ Parser.prototype[ TYPES.DEF ] = function () {
 };
 
 /**
- * 'print' Expression
+ * Returns successfully parsed PrintStatement.
  */
 Parser.prototype[ TYPES.PRINT ] = function () {
   return new PrintStatement( expected_expr( this.next() ) );
 };
 
+/**
+ * Returns successfully parsed ImportStatement.
+ */
 Parser.prototype[ TYPES.IMPORT ] = function () {
   return new ImportStatement( expected_expr( this.next() ) );
 };
 
+/**
+ * Returns successfully parsed ReturnStatement.
+ */
 Parser.prototype[ TYPES.RETURN ] = function ( value ) {
   return new ReturnStatement( expected_expr( this.next() ) );
 };
@@ -925,6 +1044,7 @@ Parser.prototype[ TYPES.PROMPT ] = function () {
 };
 
 /**
+ * Returns successfully parsed IfStatement.
  * 'if' Expression NLine Body [ 'else' Body ]
  */
 Parser.prototype[ TYPES.IF ] = function () {
@@ -961,6 +1081,7 @@ Parser.prototype[ TYPES.IF ] = function () {
 };
 
 /**
+ * Returns successfully parsed WhileStatement.
  * 'while' Expression NLine Body
  */
 Parser.prototype[ TYPES.WHILE ] = function () {
@@ -986,6 +1107,7 @@ Parser.prototype[ TYPES.WHILE ] = function () {
 };
 
 /**
+ * Returns successfully parsed DoWhileStatement.
  * 'do' NLine Body 'while' Expression ( NLine | EOF )
  */
 Parser.prototype[ TYPES.DO ] = function () {
@@ -994,7 +1116,6 @@ Parser.prototype[ TYPES.DO ] = function () {
     cond, body, term;
 
   expected( tokens[ ++this.i ], 'd_type', TYPES.NLINE );
-
   this.indent();
 
   if ( this.level <= lvl ) {
@@ -1002,9 +1123,7 @@ Parser.prototype[ TYPES.DO ] = function () {
   }
 
   body = this.body();
-
   expected( tokens[ ++this.i ], 'd_type', TYPES.WHILE );
-
   cond = tokens[ ++this.i ];
   term = tokens[ this.i + 1 ];
 
@@ -1021,17 +1140,24 @@ Parser.prototype[ TYPES.DO ] = function () {
 };
 
 /**
- * 'for' ( Identifier | AssignExpression ) 'to' Expression NLine Body
- * 'for' Identifier 'of' Expression NLine Body
- * 'for' Identifier 'in' Expression NLine Body
- * 'for' '(' Expression ';' Expression ';' Expression ')' NLine Body
+ * Returns successfully parsed
+ * one this statements:
+ *
+ * ForToStatement:
+ *   'for' ( Identifier | AssignExpression ) 'to' Expression NLine Body
+ * ForOfStatement:
+ *   'for' Identifier 'of' Expression NLine Body
+ * ForInStatement:
+ *   'for' Identifier 'in' Expression NLine Body
+ * ForStatement:
+ *   'for' '(' Expression ';' Expression ';' Expression ')' NLine Body
  */
 Parser.prototype[ TYPES.FOR ] = function () {
   var lvl = this.level,
     tokens = this.tokens,
-    a = tokens[ ++this.i ],
-    b = tokens[ ++this.i ],
-    c = tokens[ ++this.i ];
+    a = this.next(),
+    b = this.next(),
+    c;
 
   switch ( b.d_type ) {
     case TYPES.TO:
@@ -1046,6 +1172,8 @@ Parser.prototype[ TYPES.FOR ] = function () {
         unexpected_token( a );
       }
 
+      c = this.next();
+
       if ( c.t_type !== TYPES.LITERAL &&
         c.t_type !== TYPES.IDENTIFIER &&
         c.t_type !== TYPES.EXPRESSION )
@@ -1053,15 +1181,7 @@ Parser.prototype[ TYPES.FOR ] = function () {
         unexpected_token( c );
       }
 
-      expected( tokens[ ++this.i ], 'd_type', TYPES.NLINE );
-
-      this.indent();
-
-      if ( this.level < lvl ) {
-        throw SyntaxError( 'Empty for-to statement body' );
-      }
-
-      return new ForToStatement( a, c, this.body() );
+      return new ForToStatement( a, c, this.block( lvl, 'for-to' ) );
 
     case TYPES.IN:
       throw SyntaxError();
@@ -1069,7 +1189,28 @@ Parser.prototype[ TYPES.FOR ] = function () {
       throw SyntaxError();
   }
 
+  // Parse ForStatement.
   expected( a, 'd_type', TYPES.LPAREN );
+  // The Initialization.
+  a = this.not_required_expr( b, TYPES.SEMICOLON );
+  // The Condition.
+  b = this.not_required_expr( this.next(), TYPES.SEMICOLON );
+  // The FinalExpression.
+  c = this.not_required_expr( this.next(), TYPES.RPAREN );
+  return new ForStatement( a, b, c, this.block( lvl, 'for' ) );
+};
+
+Parser.prototype.not_required_expr = function ( token, req ) {
+  var expr;
+
+  if ( token.d_type !== req ) {
+    expr = expected_expr( token );
+    token = this.next();
+  }
+
+  expected( token, 'd_type', req );
+ 
+  return expr;
 };
 
 var TAGS = _.create( null );
@@ -1091,7 +1232,8 @@ valid_cond[ TYPES.NULL ] =
 
 var check_cond = function ( token ) {
   if ( !valid_cond[ token.d_type ] ) {
-    throw TypeError( 'Expected boolean, got ' + ( TAGS[ token.d_type ] || TAGS[ TYPES.ILLEGAL ] ) );
+    throw TypeError( 'Expected boolean, got ' +
+      ( TAGS[ token.d_type ] || TAGS[ TYPES.ILLEGAL ] ) );
   }
 
   return token;
@@ -1131,6 +1273,10 @@ Parser.prototype[ TYPES.CONTINUE ] = function () {
   return ContinueStatement;
 };
 
+/**
+ * Counts the current level of
+ * indentation in current line.
+ */
 Parser.prototype.indent = function ( continues ) {
   var tokens = this.tokens,
     len = this.length;
@@ -1187,7 +1333,7 @@ Parser.prototype.body = function () {
       case TYPES.EOF:
         return body;
       default:
-        throw token;
+        throw TypeError();
     }
 
     if ( value ) {
@@ -1202,6 +1348,10 @@ Parser.prototype.body = function () {
   return body;
 };
 
+/**
+ * Returns Abstract Syntax Tree.
+ * https://en.m.wikipedia.org/wiki/Abstract_syntax_tree
+ */
 Parser.prototype.ast = function ( tokens ) {
   this.tokens = this.expressions( tokens );
   this.length = this.tokens.length;
@@ -1209,15 +1359,21 @@ Parser.prototype.ast = function ( tokens ) {
   return this.body();
 };
 
-/** class Scope */
+/**
+ * class Scope
+ */
 var EmptyScope = function () {};
 EmptyScope.prototype = _.create( null );
 
-/** class GlobalScope */
+/**
+ * class GlobalScope
+ */
 var GlobalScope = function () {};
 GlobalScope.prototype = _.create( null );
 
-/** class ScopeManager */
+/**
+ * class ScopeManager
+ */
 var ScopeManager = function ( scope ) {
   this.scope = scope;
 };
@@ -1263,42 +1419,14 @@ ScopeManager.prototype.data = function ( token ) {
   throw TypeError( token.value + ' is not a literal' );
 };
 
-var string_to_number = function ( string ) {
-  var match = /^\s*([-+]?\d+|\d*\.\d+)\s*$/.exec( string );
-
-  return match ?
-    new Number( window.Number( match[ 1 ] ) ) :
-    TOKENS.NAN;
-};
-
-var to_number = function ( token ) {
-  switch ( token.d_type ) {
-    case TYPES.NUMBER:
-      return token;
-    case TYPES.NULL:
-      return TOKENS.ZERO;
-    case TYPES.BOOLEAN:
-      return token.value ? TOKENS.ONE : TOKENS.ZERO;
-  }
-
-  throw TypeError('"Can\'t convert "' + token.value + '" to a number' );
-};
-
 /**
  * class Runtime
  */
-var Runtime = function ( parent_scope_manager ) {
+var Runtime = function () {
   this.scanner = new Scanner();
   this.parser = new Parser();
-
-  if ( parent_scope_manager ) {
-    this.scope = new EmptyScope();
-    this.scope_manager =
-      new ScopeManager( this.scope, parent_scope_manager );
-  } else {
-    this.scope = new GlobalScope();
-    this.scope_manager = new ScopeManager( this.scope );
-  }
+  this.scope = new GlobalScope();
+  this.scope_manager = new ScopeManager( this.scope );
 };
 
 Runtime.prototype.loop_scope = 0;
@@ -1361,16 +1489,16 @@ Runtime.prototype.run = function ( ast ) {
   }
 };
 
-Runtime.prototype.data = function ( argument ) {
-  if ( argument.t_type === TYPES.IDENTIFIER ) {
-    argument = this.scope_manager.get( argument );
-  } else if ( argument.t_type === TYPES.EXPRESSION ) {
-    argument = this.expression( argument );
-  } else if ( argument.t_type !== TYPES.LITERAL ) {
+Runtime.prototype.data = function ( token ) {
+  if ( token.t_type === TYPES.IDENTIFIER ) {
+    token = this.scope_manager.get( token );
+  } else if ( token.t_type === TYPES.EXPRESSION ) {
+    token = this.expression( token );
+  } else if ( token.t_type !== TYPES.LITERAL ) {
     throw SyntaxError();
   }
 
-  return argument;
+  return token;
 };
 
 Runtime.prototype[ TYPES.ASSIGN ] = function ( a, b ) {
@@ -1571,8 +1699,6 @@ Runtime.prototype[ TYPES.OR ] = function ( a, b ) {
       return a.value ?
         a : check_cond( this.expression( b ) );
   }
-
-  throw TypeError();
 };
 
 Runtime.prototype[ TYPES.AND ] = function ( a, b ) {
@@ -1587,8 +1713,6 @@ Runtime.prototype[ TYPES.AND ] = function ( a, b ) {
       return a.value ?
         check_cond( this.expression( b ) ) : a;
   }
-
-  throw TypeError();
 };
 
 Runtime.prototype[ TYPES.PERIOD ] = function ( a, b ) {
@@ -1603,15 +1727,46 @@ Runtime.prototype[ TYPES.PERIOD ] = function ( a, b ) {
   return a[ b.value ] || TOKENS.NULL;
 };
 
-Runtime.prototype[ TYPES.FOR_TO ] = function ( statement ) {
-  var body = statement.body,
-    end = this.data( statement.end ),
+Runtime.prototype[ TYPES.FOR ] = function ( stmt ) {
+  if ( stmt.init ) {
+    this.data( stmt.init );
+  }
+
+  ++this.loop_scope;
+
+  while ( !stmt.condition ||
+    check_cond( this.data( stmt.condition ) ).value )
+  {
+    this.run( stmt.body );
+    this.check_continue();
+
+    if ( this.check_break() ) {
+      break;
+    }
+
+    if ( stmt.final_expr ) {
+      this.data( stmt.final_expr );
+    }
+  }
+
+  --this.loop_scope;
+};
+
+/**
+ * Bug: if we change the `begin` value
+ * in the scope, then the reference
+ * to `begin` will no longer point
+ * to a value from the scope.
+ */
+Runtime.prototype[ TYPES.FOR_TO ] = function ( stmt ) {
+  var body = stmt.body,
+    end = this.data( stmt.final_expr ),
     begin;
 
-  if ( statement.iterator.t_type === TYPES.EXPRESSION ) {
-    begin = this.expression( statement.iterator );
+  if ( stmt.init.t_type === TYPES.EXPRESSION ) {
+    begin = this.expression( stmt.init );
   } else {
-    begin = this.scope_manager.get( statement.iterator );
+    begin = this.scope_manager.get( stmt.init );
   }
 
   ++this.loop_scope;
@@ -1639,9 +1794,6 @@ Runtime.prototype[ TYPES.FOR_TO ] = function ( statement ) {
   --this.loop_scope;
 };
 
-/**
- * #if-statement
- */
 Runtime.prototype[ TYPES.IF ] = function ( statement ) {
   if ( check_cond( this.data( statement.condition ) ).value ) {
     this.run( statement.body );
@@ -1650,9 +1802,6 @@ Runtime.prototype[ TYPES.IF ] = function ( statement ) {
   }
 };
 
-/**
- * #def
- */
 Runtime.prototype[ TYPES.DEF ] = function ( statement ) {
   this.scope_manager.set( statement.identifier, statement );
 };
@@ -1663,11 +1812,10 @@ Runtime.prototype[ TYPES.CALL ] = function ( call ) {
   if ( def.d_type !== TYPES.DEF ) {
     throw TypeError( call.identifier + ' is not a function' );
   }
+
+  def.runtime = new Runtime( this );
 };
 
-/**
- * #while-statement
- */
 Runtime.prototype[ TYPES.WHILE ] = function ( statement ) {
   ++this.loop_scope;
 
@@ -1777,6 +1925,7 @@ var TOKENS = {
   RBRACE: new Punctuator( '}', TYPES.RBRACE, 0 ),
   COMMA : new Punctuator( ',', TYPES.COMMA,  1 ),
   ARROW : new Punctuator( '=>', TYPES.ARROW, 0 ),
+  SEMICOLON: new Punctuator( ';', TYPES.SEMICOLON, 0 ),
 
   /**
    * #unary-operator-tokens

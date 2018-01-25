@@ -1,4 +1,5 @@
 
 import 'code/nested.hg'
-print '\n'
 import 'code/if-else.hg'
+import 'code/example.hg'
+import 'code/escaping.hg'

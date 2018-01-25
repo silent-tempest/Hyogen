@@ -52,7 +52,6 @@ var document = window.document,
     concat = arr.concat,
     arrslice = arr.slice,
     push = arr.push,
-    arrsort = arr.sort,
     call = fn.call,
     floor = Math.floor,
     round = Math.round,
@@ -163,9 +162,10 @@ var isArrayLikeObject = function ( value ) {
  * _.isBoolean( new Boolean() ) // -> true
  */
 var isBoolean = function ( value ) {
-  return value ?
-    value === true || typeof value == 'object' && toString.call( value ) == '[object Boolean]' :
-    value === false;
+  return value != null && (
+    typeof value == 'boolean' ||
+    typeof value == 'object' &&
+    toString.call( value ) == '[object Boolean]' );
 };
 
 /**
@@ -492,8 +492,8 @@ var isWindowLike = function ( value ) {
  * baseAccessor(
  *   nested,
  *   toPath( 'one.two.three' ),
- *   0,
- *   3,
+ *   0, // offset from right
+ *   3, // value to set
  *   true ); // -> 3
  *
  * Now `nested` is:
@@ -729,28 +729,40 @@ var baseForIn = function ( object, iteratee, context, keys, fromRight ) {
   return object;
 };
 
+support.indexOf = !!arr.indexOf;
+support.lastIndexOf = !!arr.lastIndexOf;
+
 var baseIndexOf = function ( iterable, search, fromIndex, fromRight ) {
+  if ( support.indexOf && search === search ) {
+    if ( !fromRight ) {
+      return arr.indexOf( iterable, search, fromIndex );
+    } else if ( support.lastIndexOf ) {
+      return arr.lastIndexOf( iterable, search, fromIndex );
+    }
+  }
+
   var length = getLength( iterable ),
       i = -1,
-      j = length + i,
+      j = length - 1,
       index, value;
 
   if ( !length ) {
-    return j;
+    return -1;
   }
 
   if ( fromIndex !== undefined ) {
     fromIndex = baseToIndex( fromIndex, length );
 
     i += j = fromRight ?
-      min( j, fromIndex ) : max( 0, fromIndex );
+      min( j, fromIndex ) :
+      max( 0, fromIndex );
   }
 
   for ( ; j >= 0; --j ) {
     index = fromRight ? j : ++i;
     value = iterable[ index ];
 
-    if ( value === search ? has( index, iterable ) : value !== value && search !== search ) {
+    if ( value === search || value !== value && search !== search ) {
       return index;
     }
   }
@@ -913,7 +925,7 @@ var baseTimes = function ( times, callback ) {
 };
 
 var baseToIndex = function ( value, length ) {
-  if ( !length || !value || !( value = floor( value ) ) ) {
+  if ( !length || !value ) {
     return 0;
   }
 
@@ -970,34 +982,12 @@ var createAssign = function ( getKeys ) {
   };
 };
 
-var createDeepFind = function ( by, each ) {
-  return function ( object, search ) {
-    var returnValue = [ false ];
-
-    each( object, function ( value, key ) {
-      if ( by ? search( value, key, this ) : key === search ) {
-        return ( returnValue = [ true, value ] ), false;
-      }
-
-      if ( value !== this && !isPrimitive( value ) ) {
-        value = find( value, search );
-
-        if ( value[ 0 ] ) {
-          return ( returnValue = value ), false;
-        }
-      }
-    }, object );
-
-    return returnValue;
-  };
-};
-
 var createEach = function ( fromRight ) {
   return function ( iterable, iteratee, context ) {
     iterable = toObject( iterable );
     iteratee = getIteratee( iteratee );
 
-    return isArrayLikeObject( iterable ) ?
+    return isArrayLike( iterable ) ?
       baseForEach( iterable, iteratee, context, fromRight ) :
       baseForIn( iterable, iteratee, context, getKeys( iterable ), fromRight );
   };
@@ -1012,7 +1002,9 @@ var createEverySome = function ( every ) {
         length = getLength( iterable );
 
     for ( ; i < length; ++i ) {
-      if ( has( i, iterable ) && iteratee.call( context, iterable[ i ], i, iterable ) != every ) {
+      if ( has( i, iterable ) && iteratee
+        .call( context, iterable[ i ], i, iterable ) != every )
+      {
         return !every;
       }
     }
@@ -1023,9 +1015,11 @@ var createEverySome = function ( every ) {
 
 var createFilter = function ( not ) {
   return function ( iterable, iteratee, context ) {
-    iterable = getIterable( toObject( iterable ) );
-    iteratee = getIteratee( iteratee );
-    return baseFilter( iterable, iteratee, context, not );
+    return baseFilter(
+      getIterable( toObject( iterable ) ),
+      getIteratee( iteratee ),
+      context,
+      not );
   };
 };
 
@@ -1041,7 +1035,9 @@ var createFind = function ( returnIndex, fromRight ) {
       index = fromRight ? j : ++i;
       value = iterable[ index ];
 
-      if ( has( index, iterable ) && iteratee.call( context, value, index, iterable ) ) {
+      if ( has( index, iterable ) &&
+        iteratee.call( context, value, index, iterable ) )
+      {
         return returnIndex ? index : value;
       }
     }
@@ -1075,10 +1071,6 @@ var createForIn = function ( getKeys, fromRight ) {
 
 var createIndexOf = function ( fromRight ) {
   return function ( iterable, search, fromIndex ) {
-    if ( arguments.length < 2 ) {
-      return -1;
-    }
-
     return baseIndexOf( toObject( iterable ), search, fromIndex, fromRight );
   };
 };
@@ -1186,7 +1178,8 @@ var toCamelCase = function () {
 
   return function ( string ) {
     return string.indexOf( '-' ) < 0 ?
-      string : string.replace( /-(\w)/g, toCamelCase );
+      string :
+      string.replace( /-(\w)/g, toCamelCase );
   };
 }();
 
@@ -1261,6 +1254,10 @@ var isKey = function ( value ) {
     return true;
   }
 
+  if ( isArray( value ) ) {
+    return false;
+  }
+
   var type = typeof value;
 
   return type == 'number' ||
@@ -1287,7 +1284,8 @@ var toKey = function ( value ) {
 
   key = '' + value;
 
-  return key == '0' && 1 / value == -Infinity ? '-0' : key;
+  return key == '0' && 1 / value == -Infinity ?
+    '-0' : unescape( key );
 };
 
 var getStyle = function ( element, name, computed_style ) {
@@ -1386,8 +1384,6 @@ var clamp = function ( value, lower, upper ) {
  *  this.person = this;
  * };
  *
- * Person.prototype = _.create( null );
- *
  * Person.prototype.greet = function () {
  *   return this.greetings;
  * };
@@ -1432,9 +1428,9 @@ var cloneArray = function ( iterable ) {
  */
 var compact = function ( iterable ) {
   var compacted = [],
-    i = 0,
-    len = iterable.length,
-    value;
+      i = 0,
+      len = iterable.length,
+      value;
 
   for ( ; i < len; ++i ) {
     if ( ( value = iterable[ i ] ) ) {
@@ -1540,8 +1536,6 @@ var globalExec = function ( regexp, string ) {
     return exec( regexp, '' + string );
   }
 
-  warn( 'If regexp has the global flag use <RegExp>.exec(<String>)' );
-
   return regexp.exec( string );
 };
 
@@ -1646,18 +1640,21 @@ var file = function ( path, options ) {
   var data = null,
       use_async, request, id;
 
-  // _.file( options ); // async = options.async || true
+  // _.file( options );
+  // async = options.async || true
   if ( typeof path != 'string' ) {
     options = defaults( default_file_options, path );
-    path = options.path;
     use_async = options.async === undefined || options.async;
+    path = options.path;
 
-  // _.file( path ); // async = false
+  // _.file( path );
+  // async = false
   } else if ( options === undefined ) {
     options = default_file_options;
     use_async = false;
 
-  // _.file( path, options ); // async = options.async || true
+  // _.file( path, options );
+  // async = options.async || true
   } else {
     options = defaults( default_file_options, options );
     use_async = options.async === undefined || options.async;
@@ -1726,11 +1723,11 @@ var includes = function ( object, value ) {
     return object.indexOf( value ) >= 0;
   }
 
-  if ( isArrayLikeObject( object ) ) {
-    return baseIndexOf( object, value ) >= 0;
+  if ( !isArrayLikeObject( object ) ) {
+    object = getValues( object );
   }
 
-  return baseIndexOf( getValues( object ), value ) >= 0;
+  return indexOf( object, value ) >= 0;
 };
 
 var invert = function ( target ) {
@@ -1988,14 +1985,6 @@ var reduceRight = function ( iterable, iteratee, value ) {
   return value;
 };
 
-var reverse = function ( iterable ) {
-  if ( iterable == null ) {
-    throw TypeError( ERR_UNDEFINED_OR_NULL );
-  }
-
-  return arr.reverse.call( iterable );
-};
-
 var sample = function ( object, size, iterable ) {
   return baseSample( getIterable( toObject( object ) ) );
 };
@@ -2040,11 +2029,6 @@ var shuffle = function ( object ) {
   return baseShuffle( toArray( object ) );
 };
 
-var sleep = function ( ms ) {
-  var awakeTime = timestamp() + ms;
-  while ( timestamp() < awakeTime );
-};
-
 var slice = function ( iterable, start, end ) {
   var length = getLength( iterable = toObject( iterable ) ),
       i, sliced, index;
@@ -2070,10 +2054,7 @@ var slice = function ( iterable, start, end ) {
 };
 
 var times = function ( times, callback ) {
-  times = callback === undefined ?
-    ( callback = times, 1 ) : defaultTo( floor( times ), 1 );
-
-  if ( !isFunctionLike( callback ) ) {
+  if ( typeof callback != 'function' ) {
     throw TypeError( ERR_FUNCTION_EXPECTED );
   }
 
@@ -2176,27 +2157,11 @@ var defaults = function ( defaults, object ) {
   return mixin( true, clone( true, defaults ), object );
 };
 
-var sort_numbers = function ( a, b ) {
-  return a - b;
-};
-
-var sort = function ( array, comparator ) {
-  if ( isNumber( array[ 0 ] ) ) {
-    return arrsort.call( array, sort_numbers );
-  }
-
-  return arrsort.call( array );
-};
-
 var assign = Object.assign || createAssign( getKeys ),
     assignIn = createAssign( getKeysIn ),
     each = createEach( false ),
     eachRight = createEach( true ),
     ceilnum = createRound( ceil ),
-    deepFind = createDeepFind( false, each ),
-    deepFindLast = createDeepFind( false, eachRight ),
-    deepFindBy = createDeepFind( true, each ),
-    deepFindLastBy = createDeepFind( true, eachRight ),
     every = createEverySome( true ),
     some = createEverySome( false ),
     filter = createFilter( false ),
@@ -4825,7 +4790,6 @@ peako.getComputedStyle = getComputedStyle;
 peako.lowerFirst = lowerFirst;
 peako.upperFirst = upperFirst;
 peako.style = getStyle;
-peako.prop = property;
 peako.access = accessor;
 peako.assign = assign;
 peako.assignIn = assignIn;
@@ -4839,10 +4803,6 @@ peako.cloneArray = cloneArray;
 peako.compact = compact;
 peako.constant = constant;
 peako.create = create;
-peako.deepFind = deepFind;
-peako.deepFindBy = deepFindBy;
-peako.deepFindLast = deepFindLast;
-peako.deepFindLastBy = deepFindLastBy;
 peako.defaults = defaults;
 peako.defaultTo = defaultTo;
 peako.defineProperties = defineProperties;
@@ -4911,23 +4871,20 @@ peako.nth = nth;
 peako.nthArg = nthArg;
 peako.once = once;
 peako.parseHTML = parseHTML;
-peako.property = property;
+peako.property = peako.prop = property;
 peako.random = random;
 peako.range = range;
 peako.rangeRight = rangeRight;
 peako.reduce = reduce;
 peako.reduceRight = reduceRight;
 peako.reject = reject;
-peako.reverse = reverse;
 peako.round = roundnum;
 peako.sample = sample;
 peako.sampleSize = sampleSize;
 peako.setPrototypeOf = setPrototypeOf;
 peako.shuffle = shuffle;
-peako.sleep = sleep;
 peako.slice = slice;
 peako.some = some;
-peako.sort = sort;
 peako.times = times;
 peako.timestamp = timestamp;
 peako.toArray = toArray;
