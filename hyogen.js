@@ -163,18 +163,18 @@ conversions[ TYPES.NULL ][ TYPES.STRING ] = function () {
 
 conversions[ TYPES.BOOLEAN ] = {};
 
-conversions[ TYPES.BOOLEAN ][ TYPES.NUMBER ] = function ( value ) {
-  return value.value ? TOKENS.ONE : TOKENS.ZERO;
+conversions[ TYPES.BOOLEAN ][ TYPES.NUMBER ] = function ( token ) {
+  return token.value ? TOKENS.ONE : TOKENS.ZERO;
 };
 
-conversions[ TYPES.BOOLEAN ][ TYPES.STRING ] = function ( value ) {
-  return value.value ? STRINGS.TRUE : STRINGS.FALSE;
+conversions[ TYPES.BOOLEAN ][ TYPES.STRING ] = function ( token ) {
+  return token.value ? STRINGS.TRUE : STRINGS.FALSE;
 };
 
 conversions[ TYPES.NUMBER ] = {};
 
 conversions[ TYPES.NUMBER ][ TYPES.BOOLEAN ] = function ( token ) {
-  return value.value ? TOKENS.TRUE : TOKENS.FALSE;
+  return token.value ? TOKENS.TRUE : TOKENS.FALSE;
 };
 
 conversions[ TYPES.NUMBER ][ TYPES.STRING ] = function ( token ) {
@@ -185,10 +185,10 @@ conversions[ TYPES.NUMBER ][ TYPES.STRING ] = function ( token ) {
   }
 
   /**
-   * if value is Infinity
-   *   return STRINGS.POS_INFINITY
-   * else if value is -Infinity
-   *   return STRINGS.NEG_INFINITY
+   * if value > MAX_NUMBER
+   *   return STRINGS.POS_INF
+   * else if value < MIN_NUMBER
+   *   return STRINGS.NEG_INF
    */
 
   return '' + value;
@@ -2076,6 +2076,15 @@ var TOKENS = {
 
 };
 
+var STRINGS = {
+  NAN    : new String( 'NaN' ),
+  POS_INF: new String( 'Infinity' ),
+  NEG_INF: new String( '-Infinity' ),
+  NULL   : new String( 'null' ),
+  TRUE   : new String( 'true' ),
+  FALSE  : new String( 'false' )
+};
+
 /**
  * #keywords
  */
@@ -2087,20 +2096,17 @@ _.forEach( [
   'DEF',
   'DO',
   'ELSE',
-  'FALSE',
   'FOR',
   'FROM',
   'IF',
   'IMPORT',
   'IN',
   'NEW',
-  'NULL',
   'OF',
   'OR',
   'PRINT',
   'RETURN',
   'THIS',
-  'TRUE',
   'TO',
   'TYPEOF',
   'WHILE',
@@ -2110,6 +2116,10 @@ _.forEach( [
 ], function ( name ) {
   IDENTIFIERS[ this[ name ].value ] = this[ name ];
 }, TOKENS );
+
+IDENTIFIERS[ 'null' ] = TOKENS.NULL;
+IDENTIFIERS[ 'true' ] = TOKENS.TRUE;
+IDENTIFIERS[ 'false' ] = TOKENS.FALSE;
 
 window.hyogen = {
   Scanner: Scanner,
