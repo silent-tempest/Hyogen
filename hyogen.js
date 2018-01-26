@@ -31,7 +31,7 @@
 
 'use strict';
 
-var settings = {
+var io = {
   print: function ( value ) {
     alert( value );
   },
@@ -133,10 +133,6 @@ var TYPES = {
 
 };
 
-var STRINGS = {
-  NAN: 'NaN'
-};
-
 var conversions = {
   convert: function ( token, type ) {
     var converter = conversions[ token.d_type ] &&
@@ -168,30 +164,17 @@ conversions[ TYPES.NULL ][ TYPES.STRING ] = function () {
 conversions[ TYPES.BOOLEAN ] = {};
 
 conversions[ TYPES.BOOLEAN ][ TYPES.NUMBER ] = function ( value ) {
-  return value ? TOKENS.ONE : TOKENS.ZERO;
+  return value.value ? TOKENS.ONE : TOKENS.ZERO;
 };
 
 conversions[ TYPES.BOOLEAN ][ TYPES.STRING ] = function ( value ) {
-  return value ? STRINGS.TRUE : STRINGS.FALSE;
+  return value.value ? STRINGS.TRUE : STRINGS.FALSE;
 };
 
 conversions[ TYPES.NUMBER ] = {};
 
 conversions[ TYPES.NUMBER ][ TYPES.BOOLEAN ] = function ( token ) {
-  var value = token.value;
-
-  /**
-   * Convert 0 and NaN to false.
-   */
-  // if ( !value ) {
-  if ( value === 0 || value !== value ) {
-    return TOKENS.FALSE;
-  }
-
-  /**
-   * Otherwise return true.
-   */
-  return TOKENS.TRUE;
+  return value.value ? TOKENS.TRUE : TOKENS.FALSE;
 };
 
 conversions[ TYPES.NUMBER ][ TYPES.STRING ] = function ( token ) {
@@ -1963,12 +1946,17 @@ Runtime.prototype[ TYPES.PRINT ] = function ( statement ) {
       value = value.value;
   }
 
-  settings.print( value );
+  io.print( value );
 };
 
 Runtime.prototype[ TYPES.SCAN ] = function ( stmt ) {
-  this.scope_manager.set( stmt.identifier,
-    new String( settings.scan() ) );
+  /* var that = this;
+
+  io.scan().then( function ( value ) {
+    that.scope_manager.set( stmt.identifier, new String( value ) );
+  } ); */
+
+  this.scope_manager.set( stmt.identifier, new String( io.scan() ) );
 };
 
 Runtime.prototype[ TYPES.IMPORT ] = function ( statement ) {
@@ -2129,7 +2117,7 @@ window.hyogen = {
   Runtime: Runtime,
   GlobalScope: GlobalScope,
   EmptyScope: EmptyScope,
-  settings: settings
+  io: io
 };
 
 } )( this );
