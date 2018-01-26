@@ -153,10 +153,16 @@ var conversions = {
 
 conversions[ TYPES.NULL ] = {};
 
-conversions[ TYPES.NULL ][ TYPES.BOOLEAN ] =
-conversions[ TYPES.NULL ][ TYPES.NUMBER ] =
-conversions[ TYPES.NULL ][ TYPES.STRING ] = function () {
+conversions[ TYPES.NULL ][ TYPES.BOOLEAN ] = function () {
   return TOKENS.FALSE;
+};
+
+conversions[ TYPES.NULL ][ TYPES.NUMBER ] = function () {
+  return TOKENS.ZERO;
+};
+
+conversions[ TYPES.NULL ][ TYPES.STRING ] = function () {
+  return STRINGS.NULL;
 };
 
 conversions[ TYPES.BOOLEAN ] = {};
