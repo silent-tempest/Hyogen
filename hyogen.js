@@ -1956,7 +1956,15 @@ Runtime.prototype[ TYPES.SCAN ] = function ( stmt ) {
     that.scope_manager.set( stmt.identifier, new String( value ) );
   } ); */
 
-  this.scope_manager.set( stmt.identifier, new String( io.scan() ) );
+  var value = io.scan();
+
+  if ( value == null ) {
+    value = STRINGS.NULL;
+  } else {
+    value = new String( '' + value );
+  }
+
+  this.scope_manager.set( stmt.identifier, value );
 };
 
 Runtime.prototype[ TYPES.IMPORT ] = function ( statement ) {
