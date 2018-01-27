@@ -4,16 +4,12 @@
 
 var output = document.getElementById( 'output' );
 
-hyogen.settings.print = function ( value ) {
+hyogen.io.print = function ( value ) {
   output.value += value + '\n';
 };
 
 var main = function ( code ) {
-  try {
-    new hyogen.Runtime()[ 'eval' ]( code );
-  } catch ( ex ) {
-    alert( ex );
-  }
+  new hyogen.Runtime()[ 'eval' ]( code );
 };
 
 _.fetch( 'code/import.hg' )

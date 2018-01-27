@@ -35,6 +35,10 @@
  *
  * Code below could be confusing!
  */
+
+// jshint esversion: 3
+// jshint unused: true
+// jshint undef: true
 ;( function ( window, undefined ) {
 
 'use strict';
@@ -648,6 +652,16 @@ if ( support.defineProperty !== 2 ) {
   }
 }
 
+/**
+ * var values = [ 0, '1', '2', 3 ];
+ *
+ * var numbers = baseFilter(
+ *   values, // iterable to filter
+ *   isNumber, // iteratee
+ *   null, // context for iteratee
+ *   false ); // invert iteratee return value (for reject)
+ * // -> [ 0, 3 ]
+ */
 var baseFilter = function ( iterable, iteratee, context, not ) {
   var i = 0,
       length = getLength( iterable ),
@@ -661,6 +675,42 @@ var baseFilter = function ( iterable, iteratee, context, not ) {
       iteratee.call( context, value, i, iterable ) != not )
     {
       filtered.push( value );
+    }
+  }
+
+  return filtered;
+};
+
+/**
+ * var weirdData = {
+ *   zero: 0,
+ *   one: '1',
+ *   two: 2
+ * };
+ *
+ * var iteratee = function ( value, key, object ) {
+ *   return key.length > 3 || typeof value != this;
+ * };
+ *
+ * var values = baseFilterObject(
+ *   weirdData, // object to filter
+ *   iteratee, // iteratee
+ *   'number', // context for iteratee
+ *   getKeys( weirdData ),
+ *   true ); // invert iteratee return value (for reject)
+ * // -> { two: 2 }
+ */
+var baseFilterObject = function ( object, iteratee, context, keys, not ) {
+  var i = 0,
+      length = keys.length,
+      filtered = {},
+      value, key;
+
+  for ( ; i < length; ++i ) {
+    value = object[ key = keys[ i ] ];
+
+    if ( iteratee.call( context, value, key, object ) != not ) {
+      filtered[ key ] = value;
     }
   }
 
@@ -841,8 +891,45 @@ var baseMap = function ( iterable, iteratee, context, fromRight ) {
 
   for ( ; i < length; ++i ) {
     if ( has( i, iterable ) ) {
-      result[ fromRight ? --j : i ] = iteratee.call( context, iterable[ i ], i, iterable );
+      result[ fromRight ? --j : i ] = iteratee
+        .call( context, iterable[ i ], i, iterable );
     }
+  }
+
+  return result;
+};
+
+/**
+ * var User = function ( name, age ) {
+ *   this.name = name;
+ *   this.age = age;
+ * };
+ *
+ * User.getAge = function ( user ) {
+ *   return user.age;
+ * };
+ *
+ * var users = {
+ *   Josh: new User( 'Josh', 1243 ),
+ *   JSON: new User( 'JSON', -1 )
+ * };
+ *
+ * var ages = baseMapObject(
+ *   users, // object to map
+ *   User.getAge, // iteratee
+ *   null, // context for iteratee
+ *   getKeys( users ) ); // properties to map in object
+ * // -> { Josh: 1243, JSON: -1 }
+ */
+var baseMapObject = function ( object, iteratee, context, keys ) {
+  var length = keys.length,
+      result = {},
+      i = 0,
+      key;
+
+  for ( ; i < length; ++i ) {
+    result[ key = keys[ i ] ] = iteratee
+      .call( context, object[ key ], key, object );
   }
 
   return result;
@@ -1013,12 +1100,19 @@ var createEverySome = function ( every ) {
   };
 };
 
-var createFilter = function ( not ) {
+var createFilter = function ( not, getKeys ) {
   return function ( iterable, iteratee, context ) {
-    return baseFilter(
-      getIterable( toObject( iterable ) ),
-      getIteratee( iteratee ),
+    iteratee = getIteratee( iteratee );
+
+    if ( isArrayLike( iterable ) ) {
+      return baseFilter( iterable, iteratee, context, not );
+    }
+
+    return baseFilterObject(
+      iterable = toObject( iterable ),
+      iteratee,
       context,
+      getKeys( iterable ),
       not );
   };
 };
@@ -1075,13 +1169,23 @@ var createIndexOf = function ( fromRight ) {
   };
 };
 
-var createMap = function ( fromRight ) {
+var createMap = function ( fromRight, getKeys ) {
   return function ( iterable, iteratee, context ) {
-    return baseMap(
-      getIterable( toObject( iterable ) ),
-      getIteratee( iteratee ),
+    iteratee = getIteratee( iteratee );
+
+    if ( isArrayLike( iterable ) ) {
+      return baseMap( iterable, iteratee, context, fromRight );
+    }
+
+    if ( fromRight ) {
+      throw TypeError( "_.mapRight for non-arrays not implemented" );
+    }
+
+    return baseMapObject(
+      iterable = toObject( iterable ),
+      iteratee,
       context,
-      fromRight );
+      getKeys( iterable ) );
   };
 };
 
@@ -1701,7 +1805,9 @@ var getPrototypeOf = Object.getPrototypeOf || function ( target ) {
     throw TypeError( ERR_UNDEFINED_OR_NULL );
   }
 
+  // jshint proto: true
   var prototype = target.__proto__,
+  // jshint proto: false
       constructor;
 
   if ( prototype !== undefined ) {
@@ -1985,7 +2091,7 @@ var reduceRight = function ( iterable, iteratee, value ) {
   return value;
 };
 
-var sample = function ( object, size, iterable ) {
+var sample = function ( object ) {
   return baseSample( getIterable( toObject( object ) ) );
 };
 
@@ -2015,7 +2121,9 @@ var setPrototypeOf = Object.setPrototypeOf || function ( target, prototype ) {
   }
 
   if ( !isPrimitive( target ) && has( '__proto__', target ) ) {
+    // jshint proto: true
     target.__proto__ = prototype;
+    // jshint proto: false
   }
 
   return target;
@@ -2164,8 +2272,10 @@ var assign = Object.assign || createAssign( getKeys ),
     ceilnum = createRound( ceil ),
     every = createEverySome( true ),
     some = createEverySome( false ),
-    filter = createFilter( false ),
-    reject = createFilter( true ),
+    filter = createFilter( false, getKeys ),
+    filterIn = createFilter( false, getKeysIn ),
+    reject = createFilter( true, getKeys ),
+    rejectIn = createFilter( true, getKeysIn ),
     find = arr.find ? bindFast( call, arr.find ) : createFind( false, false ),
     findIndex = arr.findIndex ? bindFast( call, arr.findIndex ) : createFind( true, false ),
     findLast = createFind( false, true ),
@@ -2179,7 +2289,8 @@ var assign = Object.assign || createAssign( getKeys ),
     forOwnRight = createForIn( getKeys, true ),
     indexOf = createIndexOf( false ),
     lastIndexOf = createIndexOf( true ),
-    map = createMap( false ),
+    map = createMap( false, getKeys ),
+    mapIn = createMap( false, getKeysIn ),
     mapRight = createMap( true ),
     range = createRange( false ),
     rangeRight = createRange( true ),
@@ -4815,6 +4926,7 @@ peako.exec = globalExec;
 peako.file = file;
 peako.fill = fill;
 peako.filter = filter;
+peako.filterIn = filterIn;
 peako.find = find;
 peako.findIndex = findIndex;
 peako.findLast = findLast;
@@ -4860,6 +4972,7 @@ peako.keysIn = getKeysIn;
 peako.last = last;
 peako.lastIndexOf = lastIndexOf;
 peako.map = map;
+peako.mapIn = mapIn;
 peako.mapRight = mapRight;
 peako.merge = merge;
 peako.method = peako.call = method;
@@ -4878,6 +4991,7 @@ peako.rangeRight = rangeRight;
 peako.reduce = reduce;
 peako.reduceRight = reduceRight;
 peako.reject = reject;
+peako.rejectIn = rejectIn;
 peako.round = roundnum;
 peako.sample = sample;
 peako.sampleSize = sampleSize;
