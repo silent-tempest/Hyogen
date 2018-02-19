@@ -14,17 +14,23 @@
   <meta name="viewport" content="width=device-width, minimum-scale=1.0, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, minimal-ui, shrink-to-fit=no" />
 
   <style>
+    html, body {
+      overflow: hidden;
+    }
+
     html, body, textarea {
       width: 100%;
       height: 100%;
       padding: 0;
       margin: 0;
+      box-sizing: border-box;
     }
 
     textarea {
       font: 400 16px monospace;
       letter-spacing: 1px;
-      line-height: 1.75
+      line-height: 1.75;
+      padding: 24px;
     }
   </style>
 </head>
@@ -33,11 +39,37 @@
 
   <textarea id="output"></textarea>
 
-  <noscript>
-    <div>That application doesn't work without JavaScript.</div>
-  </noscript>
+	<script type="__text/hyogen">
+		# doesn't work now :(
+		# this language is very much
+		# dependent on indentation
 
-  <script src="scripts/peako.js"></script>
+		scan scanned
+
+		print 'length of "' + scanned +
+			'" is ' + scanned.length + '\n'
+
+		sum = 0
+
+		for i = 10 to 1
+			sum += i
+
+			if i == 5
+				print '`i` is ' + i
+			else if i > 5
+				print '`i` greater than 5 (' + i + ')'
+			else if i < 5
+				print '`i` less than 5 (' + i + ')'
+			else
+				print 'something wrong'
+
+			sum -= 1.5
+
+		print '\nresult: ' + sum
+	</script>
+
+  <script src="code/import.hg" type="text/hyogen"></script>
+  <script src="../../Peako/peako.js"></script>
   <script src="../hyogen.js"></script>
   <script src="scripts/main.js"></script>
 

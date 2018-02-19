@@ -1,32 +1,11 @@
 /**
- * https://github.com/silent-tempest/Hyogen
- *
- * MIT License
- *
  * Copyright (c) 2017-2018 SILENT
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Released under the MIT License
+ * https://github.com/silent-tempest/Hyogen
  */
 
-// jshint esversion: 5
-// jshint unused: true
-// jshint undef: true
+/* jshint esversion: 5, unused: true, undef: true */
+
 ;( function ( window, undefined ) {
 
 'use strict';
@@ -827,6 +806,14 @@ Scanner.prototype.scan = function ( code ) {
   return tokens;
 };
 
+Array.prototype.toJSON = function () {
+  return _.toPlainObject( this );
+};
+
+var d = function ( value ) {
+  alert( JSON.stringify( arguments.length > 1 ? arguments : value, null, '\t' ) );
+};
+
 /**
  * class Parser
  */
@@ -998,7 +985,7 @@ Parser.prototype.block = function ( lvl, stmt ) {
   expected( this.next(), 'd_type', TYPES.NLINE );
   this.indent();
 
-  if ( this.level < lvl ) {
+  if ( this.level <= lvl ) {
     throw SyntaxError( 'Empty ' + stmt + ' statement body' );
   }
 
@@ -1026,13 +1013,13 @@ Parser.prototype.next = function () {
 /**
  * Returns successfully parsed Function.
  *
- * 'def' Identifier '(' [ Parameters ] ')' NLine
+ * Identifier '(' [ Parameters ] ')' NLine
  *   Body
- * 'def' Identifier '(' [ Parameters ] ')' '=>'
+ * Identifier '(' [ Parameters ] ')' '=>'
  *   Expression ( NLine | EOF )
- * 'def' Identifier Parameter NLine
+ * Identifier Parameter NLine
  *   Body
- * 'def' Identifier Parameter '=>'
+ * Identifier Parameter '=>'
  *   Expression ( NLine | EOF )
  *
  * Parameters:
@@ -1041,8 +1028,8 @@ Parser.prototype.next = function () {
  * Parameter:
  *   Identifier | AssignExpression
  */
-Parser.prototype[ TYPES.DEF ] = function () {
-  var id = expected( this.next(), 't_type', TYPES.IDENTIFIER ),
+Parser.prototype[ TYPES.DEF ] = function ( id ) {
+  var
     lvl = this.level,
     tok = this.next(),
     params, body;
@@ -1069,15 +1056,15 @@ Parser.prototype[ TYPES.DEF ] = function () {
       break;
 
     case TYPES.ARROW:
+      while ( this.next().t_type === TYPES.WHITESPACE );
+
       body = [
-        new ReturnStatement( expected_expr( this.next() ) )
+        new ReturnStatement( expected_expr( this.tokens[ this.i ] ) )
       ];
 
       tok = this.next();
 
-      if ( tok.d_type !== TYPES.NLINE &&
-        tok.t_type !== TYPES.EOF )
-      {
+      if ( tok.d_type !== TYPES.NLINE && tok.t_type !== TYPES.EOF ) {
         unexpected_token( tok );
       }
 
@@ -1148,7 +1135,7 @@ Parser.prototype[ TYPES.IF ] = function () {
   // skip "else"
   this.i += 2;
   this.indent();
-  ++this.level;
+  // ++this.level;
   return new IfStatement( cond, body, this.body() );
 };
 
@@ -1187,24 +1174,12 @@ Parser.prototype[ TYPES.DO ] = function () {
     lvl = this.level,
     cond, body, term;
 
-  expected( tokens[ ++this.i ], 'd_type', TYPES.NLINE );
-  this.indent();
-
-  if ( this.level <= lvl ) {
-    throw SyntaxError( 'Empty "do-while" body' );
-  }
-
-  body = this.body();
-  expected( tokens[ ++this.i ], 'd_type', TYPES.WHILE );
-  cond = tokens[ ++this.i ];
+  body = this.block( lvl, 'do-while' );
+  expected( this.next(), 'd_type', TYPES.WHILE );
+  cond = expected_expr( this.next() );
   term = tokens[ this.i + 1 ];
 
-  if ( term.d_type !== TYPES.NLINE &&
-    term.t_type !== TYPES.EOF ||
-    cond.t_type !== TYPES.LITERAL &&
-    cond.t_type !== TYPES.IDENTIFIER &&
-    cond.t_type !== TYPES.EXPRESSION )
-  {
+  if ( term.d_type !== TYPES.NLINE && term.t_type !== TYPES.EOF ) {
     throw SyntaxError();
   }
 
@@ -1243,16 +1218,9 @@ Parser.prototype[ TYPES.FOR ] = function () {
         unexpected_token( a );
       }
 
-      c = this.next();
-
-      if ( c.t_type !== TYPES.LITERAL &&
-        c.t_type !== TYPES.IDENTIFIER &&
-        c.t_type !== TYPES.EXPRESSION )
-      {
-        unexpected_token( c );
-      }
-
-      return new ForToStatement( a, c, this.block( lvl, 'for-to' ) );
+      return new ForToStatement( a,
+        expected_expr( this.next() ),
+        this.block( lvl, 'for-to' ) );
 
     case TYPES.IN:
       throw SyntaxError();
@@ -1362,7 +1330,7 @@ Parser.prototype.indent = function ( continues ) {
   this.level = 0;
 
   for ( ; this.i < len &&
-    tokens[ this.i ].d_type === TYPES.INDENT;
+    this.tokens[ this.i ].d_type === TYPES.INDENT;
     ++this.i, ++this.level );
 
   // fix skipping token after indent
@@ -1371,16 +1339,12 @@ Parser.prototype.indent = function ( continues ) {
   }
 };
 
-Parser.prototype.body = function () {
+Parser.prototype.body = function ( root ) {
   var tokens = this.tokens,
     len = this.length,
     lvl = this.level,
     body = [],
-    token, value;
-
-  if ( this.level < lvl ) {
-    return body;
-  }
+    token, value, other_token;
 
   for ( ; this.i < len; ++this.i ) {
     value = null;
@@ -1388,26 +1352,51 @@ Parser.prototype.body = function () {
 
     switch ( token.t_type ) {
       case TYPES.EXPRESSION:
-        value = token; break;
+        value = token;
+        break;
+
       case TYPES.KEYWORD:
-        value = this[ token.d_type ](); break;
+        value = this[ token.d_type ]();
+        break;
+
       case TYPES.WHITESPACE:
-        this.indent( body.length > 0 ); break;
+        if ( root && !body.length ) {
+          this.indent( true );
+          lvl = this.level;
+        } else {
+          this.indent( body.length > 0 );
+        }
+
+        break;
+
+      case TYPES.IDENTIFIER:
+        other_token = tokens[ this.i + 1 ];
+
+        if ( other_token.d_type === TYPES.LPAREN ||
+             is_param( other_token ) )
+        {
+          value = this[ TYPES.DEF ]( token );
+          break;
+        }
+
+      /* falls through */
 
       case TYPES.LITERAL:
-      case TYPES.IDENTIFIER:
-        if ( tokens[ this.i - 1 ] &&
-          tokens[ this.i - 1 ].t_type !== TYPES.WHITESPACE )
+        other_token = tokens[ this.i - 1 ];
+
+        if ( other_token &&
+             other_token.t_type !== TYPES.WHITESPACE )
         {
-          throw SyntaxError( 'Unexpected token "' + token.value + '"' );
+          unexpected_token( token );
         }
 
         break;
 
       case TYPES.EOF:
         return body;
+
       default:
-        throw TypeError();
+        throw TypeError( token.d_type );
     }
 
     if ( value ) {
@@ -1430,7 +1419,7 @@ Parser.prototype.ast = function ( tokens ) {
   this.tokens = this.expressions( tokens );
   this.length = this.tokens.length;
   this.level = this.i = 0;
-  return this.body();
+  return this.body( true );
 };
 
 /**
@@ -2060,7 +2049,7 @@ var TOKENS = {
    * #keyword-tokens
    */
   CLASS    : new Keyword( 'class',     TYPES.CLASS ),
-  DEF      : new Keyword( 'def',       TYPES.DEF ),
+  // DEF      : new Keyword( 'def',       TYPES.DEF ),
   DO       : new Keyword( 'do',        TYPES.DO ),
   ELSE     : new Keyword( 'else',      TYPES.ELSE ),
   FOR      : new Keyword( 'for',       TYPES.FOR ),
@@ -2101,7 +2090,7 @@ var IDENTIFIERS = _.create( null );
 _.forEach( [
   'AND',
   'CLASS',
-  'DEF',
+  // 'DEF',
   'DO',
   'ELSE',
   'FOR',
@@ -2129,13 +2118,64 @@ IDENTIFIERS[ 'null' ] = TOKENS.NULL;
 IDENTIFIERS[ 'true' ] = TOKENS.TRUE;
 IDENTIFIERS[ 'false' ] = TOKENS.FALSE;
 
+var runtime;
+
+var run = function () {
+  _( 'script[type="text/hyogen"]' ).each( resolve_script );
+};
+
+var resolve_script = function () {
+  var src = _( this ).attr( 'src' );
+
+  if ( src != null ) {
+    if ( _( this ).attr( 'async' ) != null ) {
+      _.fetch( src )
+        .then( text )
+        .then( run_script );
+    } else {
+      run_script( _.file( src ) );
+    }
+  } else {
+    run_script( get_source( this ) );
+  }
+};
+
+var get_source = function ( script ) {
+  var child = script.firstChild,
+      source = '';
+
+  while ( child ) {
+    if ( child.nodeType == 3 ) {
+      source += child.textContent;
+    }
+
+    child = child.nextSibling;
+  }
+
+  return source;
+};
+
+var run_script = function ( script ) {
+  if ( !runtime ) {
+    runtime = new hyogen.Runtime();
+  }
+
+  runtime[ 'eval' ]( script );
+};
+
+var text = function ( res ) {
+  return res.text();
+};
+
+
 window.hyogen = {
   Scanner: Scanner,
   Parser : Parser,
   Runtime: Runtime,
   GlobalScope: GlobalScope,
   EmptyScope: EmptyScope,
-  io: io
+  io: io,
+  run: run
 };
 
 } )( this );
