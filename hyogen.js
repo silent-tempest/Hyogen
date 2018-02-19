@@ -806,14 +806,6 @@ Scanner.prototype.scan = function ( code ) {
   return tokens;
 };
 
-Array.prototype.toJSON = function () {
-  return _.toPlainObject( this );
-};
-
-var d = function ( value ) {
-  alert( JSON.stringify( arguments.length > 1 ? arguments : value, null, '\t' ) );
-};
-
 /**
  * class Parser
  */
@@ -1111,7 +1103,8 @@ Parser.prototype[ TYPES.SCAN ] = function () {
  * 'if' Expression NLine Body [ 'else' Body ]
  */
 Parser.prototype[ TYPES.IF ] = function () {
-  var tokens = this.tokens,
+  var
+    tokens = this.tokens,
     lvl = this.level,
     cond = expected_expr( this.next() ),
     body;
@@ -1135,7 +1128,7 @@ Parser.prototype[ TYPES.IF ] = function () {
   // skip "else"
   this.i += 2;
   this.indent();
-  // ++this.level;
+  ++this.level;
   return new IfStatement( cond, body, this.body() );
 };
 
