@@ -1,18 +1,8 @@
-# Hyogen
-Hyogen is a programming language written in JavaScript.
+# Hyogen Interpreter
+This is the JavaScript interpreter of the Hyogen programming language.
 
-## Syntax Example
-
+## Hello World
 ```python
-a = b = 2 + 2 * 2
-
-if a == b
-  for i = 10 to 0
-    b += a *= i
-
-  print b
-else
-  print 'something wrong.'
-
-# -> 59184606
+print 'Hello World!'
 ```
+You can find more examples in the [example/code](example/code) folder.

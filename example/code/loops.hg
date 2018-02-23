@@ -1,0 +1,18 @@
+for j = 0 to 10
+  print j
+
+for ( i = 0; i < 10; i += 1 )
+  print i
+
+k = 0
+
+while k < 10
+  print k
+  k += 1
+
+l = 0
+
+do
+  print l
+  l += 1
+while l < 10
